@@ -329,6 +329,46 @@ void GenerateCuboids(){
   ROS_WARN("Finished generate Cuboids Map ");
 }
 
+void GenerateChargingScene(){
+  // Deterministic two-vehicle charging scene.
+  //
+  // Two parked vehicles are represented as cuboids. Their inner side faces are
+  // separated by 0.5 m, forming a narrow passage. The charging port is not
+  // inserted into the collision map here; it is published as a visualization
+  // marker by the charging demo helper node.
+  const double car_length = 2.0;
+  const double car_width = 0.70;
+  const double car_height = 0.80;
+  const double gap = 0.50;
+  const double y_center = 0.5 * (gap + car_width);
+  const double car_z = 0.5 * car_height;
+
+  // Optional room boundary. Kept low enough to look like the ground/parking
+  // boundary rather than a tall wall blocking the manipulator.
+  GenerateWall(_x_l, _x_h, _y_l, _y_l + _resolution, 0.0, 0.15, cloudMap);
+  GenerateWall(_x_l, _x_h, _y_h - _resolution, _y_h, 0.0, 0.15, cloudMap);
+  GenerateWall(_x_l, _x_l + _resolution, _y_l, _y_h, 0.0, 0.15, cloudMap);
+  GenerateWall(_x_h - _resolution, _x_h, _y_l, _y_h, 0.0, 0.15, cloudMap);
+
+  // Vehicle A: the vehicle with the charging port on its inner side.
+  GenerateBox(Eigen::Vector3d(0.25, y_center, car_z),
+              Eigen::Vector3d(car_length, car_width, car_height),
+              cloudMap);
+
+  // Vehicle B: adjacent parked vehicle, creating the 0.5 m passage.
+  GenerateBox(Eigen::Vector3d(0.25, -y_center, car_z),
+              Eigen::Vector3d(car_length, car_width, car_height),
+              cloudMap);
+
+  cloudMap.width = cloudMap.points.size();
+  cloudMap.height = 1;
+  cloudMap.is_dense = true;
+
+  kdtreeLocalMap.setInputCloud(cloudMap.makeShared());
+  _map_ok = true;
+  ROS_WARN("Finished generate Charging Scene Map ");
+}
+
 void pubPoints(){
   while (ros::ok())
   {
@@ -376,6 +416,8 @@ int main(int argc, char **argv){
     GenerateCuboids();
   }else if(_map_type == 1){
     GenerateBridge();
+  }else if(_map_type == 2){
+    GenerateChargingScene();
   }
 
   ros::Rate loop_rate(_pub_rate);

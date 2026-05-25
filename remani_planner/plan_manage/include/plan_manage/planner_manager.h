@@ -2,12 +2,14 @@
 #pragma once
 
 #include <stdlib.h>
+#include <string>
 
 #include <optimizer/poly_traj_optimizer.hpp>
 #include <traj_utils/DataDisp.h>
 #include <plan_env/grid_map.h>
 #include "traj_utils/plan_container.hpp"
 #include <ros/ros.h>
+#include <remani_diffusion_msgs/DiffusionArmPlan.h>
 #include <plan_manage/planning_visualization.h>
 #include "traj_utils/poly_traj_utils.hpp"
 #include <std_msgs/Bool.h>
@@ -75,8 +77,29 @@ namespace remani_planner
     /* main planning algorithms & modules */
     
     PlanningVisualization::Ptr visualization_;
+    bool queryDiffusionArmPrior(const Eigen::MatrixXd &waypoints,
+                                const Eigen::VectorXd &piece_times,
+                                Eigen::MatrixXd &arm_traj,
+                                std::string &status,
+                                double &score,
+                                double &infer_ms);
+    bool injectDiffusionArmPrior(std::vector<Eigen::MatrixXd> &iniStates_container,
+                                 std::vector<Eigen::MatrixXd> &finStates_container,
+                                 std::vector<Eigen::MatrixXd> &initInnerPts_container,
+                                 const std::vector<Eigen::VectorXd> &initT_container);
 
     int continous_failures_count_{0};
+    bool use_diffusion_arm_prior_{false};
+    bool diffusion_use_guidance_{true};
+    std::string diffusion_service_name_{"/diffusion_arm_planner/plan"};
+    double diffusion_timeout_ms_{40.0};
+    double diffusion_sample_dt_{0.1};
+    double diffusion_w_smooth_{0.01};
+    double diffusion_w_joint_limit_{0.02};
+    ros::ServiceClient diffusion_arm_client_;
+    int diffusion_call_count_{0};
+    int diffusion_success_count_{0};
+    int diffusion_fallback_count_{0};
 
   public:
     typedef unique_ptr<MMPlannerManager> Ptr;

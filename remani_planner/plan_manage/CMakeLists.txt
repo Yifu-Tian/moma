@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
   std_msgs
   geometry_msgs
+  visualization_msgs
+  remani_diffusion_msgs
   quadrotor_msgs
   plan_env
   path_searching
@@ -27,7 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES remani_planner
- CATKIN_DEPENDS plan_env path_searching traj_opt traj_utils 
+ CATKIN_DEPENDS plan_env path_searching traj_opt traj_utils remani_diffusion_msgs
 #  DEPENDS system_lib
 )
 
@@ -56,4 +58,14 @@ target_link_libraries(remani_planner_node
   vis_utils
   )
 
+add_executable(charging_demo_helper
+  src/charging_demo_helper.cpp
+  )
+target_link_libraries(charging_demo_helper
+  ${catkin_LIBRARIES}
+  )
 
+catkin_install_python(PROGRAMS
+  scripts/charging_scene_recorder.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )

@@ -8,7 +8,16 @@
     <arg name="joint_cmd_topic" value="/mm_controller_node/joint_cmd" />
     <arg name="gripper_cmd_topic" value="/mm_controller_node/gripper_cmd"/>
     <arg name="gripper_state_topic" value="/mm/mani/gripper_state"/>
-    <arg name="map_resolution" value="0.05" />
+    <arg name="map_resolution" default="0.05" />
+    <arg name="init_x" default="-3.0"/>
+    <arg name="init_y" default="0.0"/>
+    <arg name="init_yaw" default="0.0"/>
+    <arg name="init_j1" default="0.0"/>
+    <arg name="init_j2" default="-70.0"/>
+    <arg name="init_j3" default="110.0"/>
+    <arg name="init_j4" default="0.0"/>
+    <arg name="init_j5" default="-110.0"/>
+    <arg name="init_j6" default="0.0"/>
 
     <arg name="generate_map_size_x" default="8"/>
     <arg name="generate_map_size_y" default="8"/>
@@ -29,6 +38,15 @@
       <arg name="joint_cmd_topic" value="$(arg joint_cmd_topic)"/>
       <arg name="gripper_cmd_topic" value="$(arg gripper_cmd_topic)"/>
       <arg name="gripper_state_topic" value="$(arg gripper_state_topic)"/>
+      <arg name="init_x" value="$(arg init_x)"/>
+      <arg name="init_y" value="$(arg init_y)"/>
+      <arg name="init_yaw" value="$(arg init_yaw)"/>
+      <arg name="init_j1" value="$(arg init_j1)"/>
+      <arg name="init_j2" value="$(arg init_j2)"/>
+      <arg name="init_j3" value="$(arg init_j3)"/>
+      <arg name="init_j4" value="$(arg init_j4)"/>
+      <arg name="init_j5" value="$(arg init_j5)"/>
+      <arg name="init_j6" value="$(arg init_j6)"/>
       <arg name="camera_pose_topic" value="pcl_render_node/camera_pose"/>
       <arg name="depth_topic" value="pcl_render_node/depth"/>
       <!-- topic of point cloud measurement, such as from LIDAR  -->
@@ -53,6 +71,15 @@
       <arg name="gripper_cmd_topic" value="$(arg gripper_cmd_topic)"/>
       <arg name="gripper_state_topic" value="$(arg gripper_state_topic)"/>
       <arg name="map_resolution" value="$(arg map_resolution)" />
+      <arg name="init_x" value="$(arg init_x)"/>
+      <arg name="init_y" value="$(arg init_y)"/>
+      <arg name="init_yaw" value="$(arg init_yaw)"/>
+      <arg name="init_j1" value="$(arg init_j1)"/>
+      <arg name="init_j2" value="$(arg init_j2)"/>
+      <arg name="init_j3" value="$(arg init_j3)"/>
+      <arg name="init_j4" value="$(arg init_j4)"/>
+      <arg name="init_j5" value="$(arg init_j5)"/>
+      <arg name="init_j6" value="$(arg init_j6)"/>
     </include>
 
     <!-- map -->

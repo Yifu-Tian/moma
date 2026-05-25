@@ -1,6 +1,8 @@
 // #include <fstream>
 #include <plan_manage/planner_manager.h>
 #include <thread>
+#include <algorithm>
+#include <cmath>
 #include "visualization_msgs/Marker.h" // zx-todo
 
 namespace remani_planner
@@ -38,7 +40,15 @@ namespace remani_planner
     nh.param("mm/mobile_base_dof", pp_.mobile_base_dim_, -1);
     nh.param("mm/manipulator_dof", pp_.manipulator_dim_, -1);
     nh.param("mm/mobile_base_non_singul_vel", pp_.mobile_base_non_singul_vel_, -1.0);
+    nh.param("diffusion/enable_arm_prior", use_diffusion_arm_prior_, false);
+    nh.param("diffusion/use_guidance", diffusion_use_guidance_, true);
+    nh.param("diffusion/service_name", diffusion_service_name_, std::string("/diffusion_arm_planner/plan"));
+    nh.param("diffusion/timeout_ms", diffusion_timeout_ms_, 40.0);
+    nh.param("diffusion/sample_dt", diffusion_sample_dt_, 0.1);
+    nh.param("diffusion/w_smooth", diffusion_w_smooth_, 0.01);
+    nh.param("diffusion/w_joint_limit", diffusion_w_joint_limit_, 0.02);
     destory_cmd_pub_ = nh.advertise<std_msgs::Bool>("/mm_controller_node/destory_cmd", 10);
+    diffusion_arm_client_ = nh.serviceClient<remani_diffusion_msgs::DiffusionArmPlan>(diffusion_service_name_);
     pp_.traj_dim_ = pp_.mobile_base_dim_ + pp_.manipulator_dim_;
     total_time_.clear();
 
@@ -53,7 +63,199 @@ namespace remani_planner
     
     ploy_traj_opt_.reset(new PolyTrajOptimizer);
     ploy_traj_opt_->setParam(nh, grid_map_, mm_config_);
+
+    if (use_diffusion_arm_prior_)
+    {
+      ROS_INFO("[PlannerManager] diffusion arm prior enabled, service=%s", diffusion_service_name_.c_str());
+    }
+    else
+    {
+      ROS_INFO("[PlannerManager] diffusion arm prior disabled, using traditional initialization only.");
+    }
     
+  }
+
+  bool MMPlannerManager::queryDiffusionArmPrior(const Eigen::MatrixXd &waypoints,
+                                                const Eigen::VectorXd &piece_times,
+                                                Eigen::MatrixXd &arm_traj,
+                                                std::string &status,
+                                                double &score,
+                                                double &infer_ms)
+  {
+    status = "disabled";
+    score = 0.0;
+    infer_ms = 0.0;
+
+    if (!use_diffusion_arm_prior_)
+    {
+      return false;
+    }
+
+    const int horizon = waypoints.cols();
+    if (horizon < 2 || pp_.manipulator_dim_ <= 0)
+    {
+      status = "invalid_shape";
+      return false;
+    }
+
+    remani_diffusion_msgs::DiffusionArmPlan srv;
+    srv.request.dt = diffusion_sample_dt_;
+    if (piece_times.size() > 0 && horizon > 1)
+    {
+      srv.request.dt = piece_times.lpNorm<1>() / static_cast<double>(horizon - 1);
+    }
+    srv.request.horizon = static_cast<uint32_t>(horizon);
+    srv.request.manip_dof = static_cast<uint32_t>(pp_.manipulator_dim_);
+    srv.request.use_guidance = diffusion_use_guidance_;
+    srv.request.w_smooth = diffusion_w_smooth_;
+    srv.request.w_joint_limit = diffusion_w_joint_limit_;
+    srv.request.timeout_ms = diffusion_timeout_ms_;
+
+    // Flatten base trajectory as [x,y,yaw] row-major over time.
+    srv.request.base_traj_xyyaw.reserve(horizon * 3);
+    for (int t = 0; t < horizon; ++t)
+    {
+      const double x = waypoints(0, t);
+      const double y = waypoints(1, t);
+      double yaw = 0.0;
+      if (horizon == 1)
+      {
+        yaw = 0.0;
+      }
+      else if (t < horizon - 1)
+      {
+        yaw = atan2(waypoints(1, t + 1) - y, waypoints(0, t + 1) - x);
+      }
+      else
+      {
+        yaw = atan2(y - waypoints(1, t - 1), x - waypoints(0, t - 1));
+      }
+      srv.request.base_traj_xyyaw.push_back(x);
+      srv.request.base_traj_xyyaw.push_back(y);
+      srv.request.base_traj_xyyaw.push_back(yaw);
+    }
+
+    srv.request.arm_start_q.resize(pp_.manipulator_dim_);
+    srv.request.arm_goal_q.resize(pp_.manipulator_dim_);
+    for (int d = 0; d < pp_.manipulator_dim_; ++d)
+    {
+      srv.request.arm_start_q[d] = waypoints(pp_.mobile_base_dim_ + d, 0);
+      srv.request.arm_goal_q[d] = waypoints(pp_.mobile_base_dim_ + d, horizon - 1);
+    }
+
+    // Seed from current initial trajectory guess.
+    srv.request.arm_seed_q.reserve(horizon * pp_.manipulator_dim_);
+    for (int t = 0; t < horizon; ++t)
+    {
+      for (int d = 0; d < pp_.manipulator_dim_; ++d)
+      {
+        srv.request.arm_seed_q.push_back(waypoints(pp_.mobile_base_dim_ + d, t));
+      }
+    }
+
+    const double timeout_sec = std::max(1e-3, diffusion_timeout_ms_ / 1000.0);
+    if (!diffusion_arm_client_.waitForExistence(ros::Duration(timeout_sec)))
+    {
+      status = "service_unavailable";
+      return false;
+    }
+
+    diffusion_call_count_++;
+    if (!diffusion_arm_client_.call(srv))
+    {
+      status = "service_call_failed";
+      return false;
+    }
+
+    status = srv.response.status;
+    score = srv.response.score;
+    infer_ms = srv.response.infer_ms;
+    if (!srv.response.success)
+    {
+      return false;
+    }
+
+    const std::size_t expected_size = static_cast<std::size_t>(horizon * pp_.manipulator_dim_);
+    if (srv.response.arm_traj_q.size() != expected_size)
+    {
+      status = "invalid_response_shape";
+      return false;
+    }
+
+    arm_traj.resize(pp_.manipulator_dim_, horizon);
+    for (int t = 0; t < horizon; ++t)
+    {
+      for (int d = 0; d < pp_.manipulator_dim_; ++d)
+      {
+        arm_traj(d, t) = srv.response.arm_traj_q[t * pp_.manipulator_dim_ + d];
+      }
+    }
+    diffusion_success_count_++;
+    return true;
+  }
+
+  bool MMPlannerManager::injectDiffusionArmPrior(std::vector<Eigen::MatrixXd> &iniStates_container,
+                                                 std::vector<Eigen::MatrixXd> &finStates_container,
+                                                 std::vector<Eigen::MatrixXd> &initInnerPts_container,
+                                                 const std::vector<Eigen::VectorXd> &initT_container)
+  {
+    if (!use_diffusion_arm_prior_ || pp_.manipulator_dim_ <= 0)
+    {
+      return false;
+    }
+
+    bool any_success = false;
+    const int traj_num = static_cast<int>(initInnerPts_container.size());
+    for (int i = 0; i < traj_num; ++i)
+    {
+      const int piece_num = static_cast<int>(initT_container[i].size());
+      const int horizon = piece_num + 1;
+      if (horizon < 2)
+      {
+        continue;
+      }
+
+      Eigen::MatrixXd waypoints(pp_.traj_dim_, horizon);
+      waypoints.col(0) = iniStates_container[i].col(0);
+      waypoints.col(horizon - 1) = finStates_container[i].col(0);
+      for (int j = 1; j < horizon - 1; ++j)
+      {
+        waypoints.col(j) = initInnerPts_container[i].col(j - 1);
+      }
+
+      Eigen::MatrixXd arm_traj;
+      std::string status;
+      double score = 0.0, infer_ms = 0.0;
+      const bool ok = queryDiffusionArmPrior(waypoints, initT_container[i], arm_traj, status, score, infer_ms);
+      if (!ok)
+      {
+        ROS_WARN("[PlannerManager] diffusion arm prior skipped for segment %d, reason=%s", i, status.c_str());
+        continue;
+      }
+
+      // Keep hard boundary constraints unchanged.
+      arm_traj.col(0) = waypoints.block(pp_.mobile_base_dim_, 0, pp_.manipulator_dim_, 1);
+      arm_traj.col(horizon - 1) =
+          waypoints.block(pp_.mobile_base_dim_, horizon - 1, pp_.manipulator_dim_, 1);
+
+      for (int j = 1; j < horizon - 1; ++j)
+      {
+        initInnerPts_container[i].col(j - 1).tail(pp_.manipulator_dim_) = arm_traj.col(j);
+      }
+      iniStates_container[i].col(0).tail(pp_.manipulator_dim_) = arm_traj.col(0);
+      finStates_container[i].col(0).tail(pp_.manipulator_dim_) = arm_traj.col(horizon - 1);
+
+      any_success = true;
+      ROS_INFO("[PlannerManager] diffusion arm prior injected for segment %d, score=%.4f infer_ms=%.2f",
+               i, score, infer_ms);
+    }
+
+    if (!any_success)
+    {
+      diffusion_fallback_count_++;
+    }
+
+    return any_success;
   }
 
   bool MMPlannerManager::computeInitReferenceState(const Eigen::VectorXd &start_pt,
@@ -404,6 +606,18 @@ namespace remani_planner
     
     t_init = ros::Time::now() - t_start;
     t_start = ros::Time::now();
+
+    // Optional diffusion-based arm prior injection before optimization.
+    if (use_diffusion_arm_prior_)
+    {
+      const bool injected = injectDiffusionArmPrior(
+          iniStates_container, finStates_container, initInnerPts_container, initT_container);
+      if (!injected)
+      {
+        ROS_WARN("[PlannerManager] fallback to traditional initialization (diffusion calls=%d, success=%d, fallback=%d).",
+                 diffusion_call_count_, diffusion_success_count_, diffusion_fallback_count_);
+      }
+    }
     
     /*** STEP 2: OPTIMIZE ***/
     bool flag_success = false;

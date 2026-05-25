@@ -57,3 +57,12 @@ fsm:
 grid_map:
   use_load_map: true     # Whether to use simulation map
   use_global_map: false # Whether to use global map
+
+diffusion:
+  enable_arm_prior: false                    # Enable diffusion arm prior injection in planner_manager
+  use_guidance: true                         # Whether diffusion service should apply guidance
+  service_name: /diffusion_arm_planner/plan  # ROS service name of diffusion arm planner
+  timeout_ms: 40.0                           # Service availability timeout in milliseconds
+  sample_dt: 0.1                             # Fallback sampling dt sent to service
+  w_smooth: 0.01                             # Dummy smoothness guidance weight (phase-1)
+  w_joint_limit: 0.02                        # Dummy joint limit guidance weight (phase-1)

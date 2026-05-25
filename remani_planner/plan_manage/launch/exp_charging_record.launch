@@ -1,0 +1,41 @@
+<launch>
+  <arg name="exp_param_file" value="$(find remani_planner)/config/exp_charging_param.yaml"/>
+  <arg name="record_duration" default="20.0"/>
+  <arg name="init_x" default="-3.0"/>
+  <arg name="init_y" default="0.0"/>
+  <arg name="init_yaw" default="0.0"/>
+  <arg name="init_j1" default="0.0"/>
+  <arg name="init_j2" default="-70.0"/>
+  <arg name="init_j3" default="110.0"/>
+  <arg name="init_j4" default="0.0"/>
+  <arg name="init_j5" default="-110.0"/>
+  <arg name="init_j6" default="0.0"/>
+
+  <include file="$(find remani_planner)/launch/run_in_sim.launch">
+    <arg name="exp_param_file" value="$(arg exp_param_file)"/>
+    <arg name="generate_map_size_x" value="8"/>
+    <arg name="generate_map_size_y" value="5"/>
+    <arg name="generate_map_size_z" value="3"/>
+    <arg name="map_resolution" value="0.10"/>
+    <arg name="init_x" value="$(arg init_x)"/>
+    <arg name="init_y" value="$(arg init_y)"/>
+    <arg name="init_yaw" value="$(arg init_yaw)"/>
+    <arg name="init_j1" value="$(arg init_j1)"/>
+    <arg name="init_j2" value="$(arg init_j2)"/>
+    <arg name="init_j3" value="$(arg init_j3)"/>
+    <arg name="init_j4" value="$(arg init_j4)"/>
+    <arg name="init_j5" value="$(arg init_j5)"/>
+    <arg name="init_j6" value="$(arg init_j6)"/>
+  </include>
+
+  <node name="charging_demo_helper" pkg="remani_planner" type="charging_demo_helper" output="screen">
+    <rosparam file="$(arg exp_param_file)"/>
+    <rosparam param="fsm/init_state" subst_value="true">[$(arg init_x), $(arg init_y), $(arg init_j1), $(arg init_j2), $(arg init_j3), $(arg init_j4), $(arg init_j5), $(arg init_j6)]</rosparam>
+    <param name="fsm/init_yaw" value="$(arg init_yaw)"/>
+  </node>
+
+  <node name="charging_scene_recorder" pkg="remani_planner" type="charging_scene_recorder.py" output="screen" required="true">
+    <param name="scenario" value="charging"/>
+    <param name="duration" value="$(arg record_duration)"/>
+  </node>
+</launch>
