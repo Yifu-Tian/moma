@@ -21,6 +21,8 @@ class ChargingSceneRecorder:
         self.duration = float(rospy.get_param("~duration", 20.0))
         self.scenario = rospy.get_param("~scenario", "charging")
         self.success_threshold = float(rospy.get_param("~success_threshold", 0.15))
+        self.show_execution_trail = bool(rospy.get_param("~show_execution_trail", False))
+        self.show_planned_traj = bool(rospy.get_param("~show_planned_traj", True))
 
         self.x_min = float(rospy.get_param("~x_min", -4.0))
         self.x_max = float(rospy.get_param("~x_max", 4.0))
@@ -44,6 +46,9 @@ class ChargingSceneRecorder:
         self.backend_markers = {}
         self.robot_trail = []
         self.ee_trail = []
+        self.planned_base_path = []
+        self.planned_ee_path = []
+        self.start_base_pos = None
         self.latest_base_pos = None
         self.latest_ee_pos = None
         self.start_time = rospy.Time.now()
@@ -88,6 +93,7 @@ class ChargingSceneRecorder:
 
     def backend_callback(self, msg):
         self.update_markers(self.backend_markers, msg)
+        self.update_planned_paths()
 
     @staticmethod
     def marker_key(marker):
@@ -102,6 +108,40 @@ class ChargingSceneRecorder:
                 store.clear()
             else:
                 store[key] = marker
+
+    def update_planned_paths(self):
+        backend = [m for m in self.backend_markers.values()
+                   if m.type == Marker.MESH_RESOURCE and m.ns == "vis_mm_back_end"]
+        if not backend:
+            return
+
+        base_by_step = {}
+        gripper_by_step = {}
+        for marker in backend:
+            step = marker.id // 100
+            part = marker.id % 100
+            pos = (marker.pose.position.x, marker.pose.position.y, marker.pose.position.z)
+            if part == 0:
+                base_by_step[step] = pos
+            elif part in (18, 19, 20):
+                gripper_by_step.setdefault(step, []).append(pos)
+
+        base_path = [base_by_step[k] for k in sorted(base_by_step.keys())]
+        ee_path = []
+        for k in sorted(gripper_by_step.keys()):
+            pts = gripper_by_step[k]
+            if not pts:
+                continue
+            ee_path.append((
+                sum(p[0] for p in pts) / len(pts),
+                sum(p[1] for p in pts) / len(pts),
+                sum(p[2] for p in pts) / len(pts),
+            ))
+
+        if len(base_path) >= 2:
+            self.planned_base_path = base_path
+        if len(ee_path) >= 2:
+            self.planned_ee_path = ee_path
 
     def draw_grid(self, img):
         img[:] = (248, 248, 248)
@@ -260,6 +300,8 @@ class ChargingSceneRecorder:
 
             base = min(pts, key=lambda p: p[2])
             ee = self.end_effector_position(robot)
+            if self.start_base_pos is None:
+                self.start_base_pos = base
             self.latest_base_pos = base
             self.latest_ee_pos = ee
             self.robot_trail.append((base[0], base[1]))
@@ -271,6 +313,11 @@ class ChargingSceneRecorder:
                             offset=(14, -14), color=(60, 60, 60))
             self.draw_label(img, "end-effector", self.world_to_px(ee[0], ee[1]),
                             offset=(12, -14), color=(170, 45, 45))
+
+            if self.start_base_pos is not None:
+                start_px = self.world_to_px(self.start_base_pos[0], self.start_base_pos[1])
+                cv2.circle(img, start_px, 9, (40, 120, 255), 2)
+                self.draw_label(img, "start", start_px, offset=(10, 18), color=(35, 80, 180))
 
         for marker in self.robot_markers.values():
             if marker.type != Marker.MESH_RESOURCE:
@@ -291,12 +338,25 @@ class ChargingSceneRecorder:
         return max(pts, key=lambda p: p[2])
 
     def draw_trails(self, img):
-        if len(self.robot_trail) >= 2:
+        if self.show_execution_trail and len(self.robot_trail) >= 2:
             pts = np.asarray([self.world_to_px(x, y) for x, y in self.robot_trail], dtype=np.int32)
             self.draw_dashed_polyline(img, pts, (125, 125, 125), 2)
-        if len(self.ee_trail) >= 2:
+        if self.show_execution_trail and len(self.ee_trail) >= 2:
             pts = np.asarray([self.world_to_px(x, y) for x, y in self.ee_trail], dtype=np.int32)
             cv2.polylines(img, [pts], False, (255, 80, 80), 3)
+
+    def draw_planned_traj(self, img):
+        if not self.show_planned_traj:
+            return
+        if len(self.planned_base_path) >= 2:
+            pts = np.asarray([self.world_to_px(p[0], p[1]) for p in self.planned_base_path], dtype=np.int32)
+            cv2.polylines(img, [pts], False, (70, 70, 70), 3)
+            cv2.circle(img, tuple(pts[0]), 5, (70, 70, 70), -1)
+            cv2.circle(img, tuple(pts[-1]), 6, (40, 160, 40), -1)
+        if len(self.planned_ee_path) >= 2:
+            pts = np.asarray([self.world_to_px(p[0], p[1]) for p in self.planned_ee_path], dtype=np.int32)
+            cv2.polylines(img, [pts], False, (255, 80, 80), 3)
+            cv2.circle(img, tuple(pts[-1]), 6, (255, 80, 80), -1)
 
     def draw_legend(self, img):
         x0 = self.width - 315
@@ -311,9 +371,9 @@ class ChargingSceneRecorder:
         rows = [
             ("base", (95, 95, 95), "circle"),
             ("end-effector", (255, 80, 80), "circle"),
-            ("base trail", (125, 125, 125), "dashed"),
-            ("end-effector trail", (255, 80, 80), "line"),
-            ("planner visualization", (180, 120, 60), "line"),
+            ("planned base path", (70, 70, 70), "line"),
+            ("planned ee path", (255, 80, 80), "line"),
+            ("execution trail hidden", (125, 125, 125), "dashed"),
             ("target / charger", (40, 210, 40), "target"),
         ]
         y = y0 + 50
@@ -348,14 +408,36 @@ class ChargingSceneRecorder:
         cv2.putText(img, text, (24, 66), font, 0.56, (255, 255, 255), 3, cv2.LINE_AA)
         cv2.putText(img, text, (24, 66), font, 0.56, color, 1, cv2.LINE_AA)
 
+        if self.start_base_pos is None:
+            start_text = "start base: waiting"
+        else:
+            start_text = "start base: x=%.2f m, y=%.2f m, yaw from launch" % (
+                self.start_base_pos[0], self.start_base_pos[1])
+        cv2.putText(img, start_text, (24, 90), font, 0.50, (255, 255, 255), 3, cv2.LINE_AA)
+        cv2.putText(img, start_text, (24, 90), font, 0.50, (55, 55, 55), 1, cv2.LINE_AA)
+
+    def draw_axes(self, img):
+        origin = (70, self.height - 78)
+        axis_len = 70
+        x_end = (origin[0] + axis_len, origin[1])
+        y_end = (origin[0], origin[1] - axis_len)
+
+        cv2.circle(img, origin, 3, (40, 40, 40), -1)
+        cv2.arrowedLine(img, origin, x_end, (40, 40, 190), 2, tipLength=0.20)
+        cv2.arrowedLine(img, origin, y_end, (30, 130, 40), 2, tipLength=0.20)
+        cv2.putText(img, "+x", (x_end[0] + 8, x_end[1] + 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.50, (40, 40, 190), 1, cv2.LINE_AA)
+        cv2.putText(img, "+y", (y_end[0] - 12, y_end[1] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.50, (30, 130, 40), 1, cv2.LINE_AA)
+        cv2.putText(img, "world xy", (origin[0] - 28, origin[1] + 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (70, 70, 70), 1, cv2.LINE_AA)
+
     def render_frame(self):
         img = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         self.draw_grid(img)
         self.draw_map(img)
 
-        for marker in self.backend_markers.values():
-            if marker.type in (Marker.LINE_STRIP, Marker.LINE_LIST, Marker.POINTS):
-                self.draw_marker(img, marker, color_override=(180, 120, 60))
+        self.draw_planned_traj(img)
 
         self.draw_charger(img)
 
@@ -363,6 +445,7 @@ class ChargingSceneRecorder:
         self.draw_robot(img)
         self.draw_legend(img)
         self.draw_metrics(img)
+        self.draw_axes(img)
 
         elapsed = (rospy.Time.now() - self.start_time).to_sec()
         cv2.putText(img, f"{self.scenario}  t={elapsed:04.1f}s", (24, 36),
@@ -395,6 +478,12 @@ class ChargingSceneRecorder:
         else:
             rospy.loginfo("[charging_scene_recorder] Final base position: x=%.3f y=%.3f z=%.3f",
                           self.latest_base_pos[0], self.latest_base_pos[1], self.latest_base_pos[2])
+
+        if self.start_base_pos is None:
+            rospy.logwarn("[charging_scene_recorder] Start base position unavailable.")
+        else:
+            rospy.loginfo("[charging_scene_recorder] Start base position: x=%.3f y=%.3f z=%.3f",
+                          self.start_base_pos[0], self.start_base_pos[1], self.start_base_pos[2])
 
         if self.latest_ee_pos is None:
             rospy.logwarn("[charging_scene_recorder] Final end-effector position unavailable.")
