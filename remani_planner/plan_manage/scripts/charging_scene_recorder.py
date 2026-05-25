@@ -20,6 +20,7 @@ class ChargingSceneRecorder:
         self.fps = float(rospy.get_param("~fps", 20.0))
         self.duration = float(rospy.get_param("~duration", 20.0))
         self.scenario = rospy.get_param("~scenario", "charging")
+        self.success_threshold = float(rospy.get_param("~success_threshold", 0.15))
 
         self.x_min = float(rospy.get_param("~x_min", -4.0))
         self.x_max = float(rospy.get_param("~x_max", 4.0))
@@ -43,8 +44,8 @@ class ChargingSceneRecorder:
         self.backend_markers = {}
         self.robot_trail = []
         self.ee_trail = []
-        self.latest_base_xy = None
-        self.latest_ee_xy = None
+        self.latest_base_pos = None
+        self.latest_ee_pos = None
         self.start_time = rospy.Time.now()
         self.frame_count = 0
 
@@ -206,6 +207,28 @@ class ChargingSceneRecorder:
             cv2.circle(img, p, 8, (40, 210, 40), 2)
             self.draw_label(img, "target", p, offset=(10, 20), color=(20, 120, 40))
 
+    def target_position(self):
+        target = self.charger_markers.get(("charging_port", 1))
+        if target is None:
+            return None
+        p = target.pose.position
+        return (p.x, p.y, p.z)
+
+    def ee_target_distance(self):
+        target = self.target_position()
+        if target is None or self.latest_ee_pos is None:
+            return None
+        dx = self.latest_ee_pos[0] - target[0]
+        dy = self.latest_ee_pos[1] - target[1]
+        dz = self.latest_ee_pos[2] - target[2]
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    def is_success(self):
+        dist = self.ee_target_distance()
+        if dist is None:
+            return False
+        return dist <= self.success_threshold
+
     @staticmethod
     def marker_color(marker):
         b = int(max(0, min(255, marker.color.b * 255)))
@@ -236,9 +259,9 @@ class ChargingSceneRecorder:
                 cv2.circle(img, p, radius, (30, 30, 30), 1)
 
             base = min(pts, key=lambda p: p[2])
-            ee = max(pts, key=lambda p: p[2])
-            self.latest_base_xy = (base[0], base[1])
-            self.latest_ee_xy = (ee[0], ee[1])
+            ee = self.end_effector_position(robot)
+            self.latest_base_pos = base
+            self.latest_ee_pos = ee
             self.robot_trail.append((base[0], base[1]))
             self.ee_trail.append((ee[0], ee[1]))
             self.robot_trail = self.robot_trail[-600:]
@@ -252,6 +275,20 @@ class ChargingSceneRecorder:
         for marker in self.robot_markers.values():
             if marker.type != Marker.MESH_RESOURCE:
                 self.draw_marker(img, marker)
+
+    @staticmethod
+    def end_effector_position(robot_markers):
+        # For FastArmer with idx=0, gripper mesh ids are 18/19/20.
+        # Use the gripper center when available. Falling back to the highest
+        # marker keeps the recorder usable for other manipulators.
+        gripper = [m for m in robot_markers if m.id in (18, 19, 20)]
+        if gripper:
+            x = sum(m.pose.position.x for m in gripper) / len(gripper)
+            y = sum(m.pose.position.y for m in gripper) / len(gripper)
+            z = sum(m.pose.position.z for m in gripper) / len(gripper)
+            return (x, y, z)
+        pts = [(m.pose.position.x, m.pose.position.y, m.pose.position.z) for m in robot_markers]
+        return max(pts, key=lambda p: p[2])
 
     def draw_trails(self, img):
         if len(self.robot_trail) >= 2:
@@ -296,6 +333,21 @@ class ChargingSceneRecorder:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.48, (45, 45, 45), 1, cv2.LINE_AA)
             y += 20
 
+    def draw_metrics(self, img):
+        dist = self.ee_target_distance()
+        if dist is None:
+            text = "ee-target: waiting"
+            color = (85, 85, 85)
+        else:
+            ok = dist <= self.success_threshold
+            text = "ee-target: %.3f m   threshold: %.2f m   success: %s" % (
+                dist, self.success_threshold, "YES" if ok else "NO")
+            color = (20, 125, 45) if ok else (40, 40, 190)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(img, text, (24, 66), font, 0.56, (255, 255, 255), 3, cv2.LINE_AA)
+        cv2.putText(img, text, (24, 66), font, 0.56, color, 1, cv2.LINE_AA)
+
     def render_frame(self):
         img = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         self.draw_grid(img)
@@ -310,6 +362,7 @@ class ChargingSceneRecorder:
         self.draw_trails(img)
         self.draw_robot(img)
         self.draw_legend(img)
+        self.draw_metrics(img)
 
         elapsed = (rospy.Time.now() - self.start_time).to_sec()
         cv2.putText(img, f"{self.scenario}  t={elapsed:04.1f}s", (24, 36),
@@ -330,6 +383,37 @@ class ChargingSceneRecorder:
 
         self.writer.release()
         rospy.loginfo("[charging_scene_recorder] Saved %d frames to %s", self.frame_count, self.output_path)
+        self.log_final_metrics()
+
+    def log_final_metrics(self):
+        target = self.target_position()
+        dist = self.ee_target_distance()
+        success = self.is_success()
+
+        if self.latest_base_pos is None:
+            rospy.logwarn("[charging_scene_recorder] Final base position unavailable.")
+        else:
+            rospy.loginfo("[charging_scene_recorder] Final base position: x=%.3f y=%.3f z=%.3f",
+                          self.latest_base_pos[0], self.latest_base_pos[1], self.latest_base_pos[2])
+
+        if self.latest_ee_pos is None:
+            rospy.logwarn("[charging_scene_recorder] Final end-effector position unavailable.")
+        else:
+            rospy.loginfo("[charging_scene_recorder] Final end-effector position: x=%.3f y=%.3f z=%.3f",
+                          self.latest_ee_pos[0], self.latest_ee_pos[1], self.latest_ee_pos[2])
+
+        if target is None:
+            rospy.logwarn("[charging_scene_recorder] Target position unavailable.")
+        else:
+            rospy.loginfo("[charging_scene_recorder] Target position: x=%.3f y=%.3f z=%.3f",
+                          target[0], target[1], target[2])
+
+        if dist is None:
+            rospy.logwarn("[charging_scene_recorder] Final ee-target distance unavailable.")
+        else:
+            rospy.loginfo("[charging_scene_recorder] Final ee-target distance: %.3f m", dist)
+            rospy.loginfo("[charging_scene_recorder] Success threshold: %.3f m", self.success_threshold)
+            rospy.loginfo("[charging_scene_recorder] Success: %s", "true" if success else "false")
 
 
 if __name__ == "__main__":

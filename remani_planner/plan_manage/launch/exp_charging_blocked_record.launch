@@ -1,6 +1,6 @@
 <launch>
   <arg name="exp_param_file" value="$(find remani_planner)/config/exp_charging_blocked_param.yaml"/>
-  <arg name="record_duration" default="20.0"/>
+  <arg name="record_duration" default="35.0"/>
   <arg name="init_x" default="-1.30"/>
   <arg name="init_y" default="1.15"/>
   <arg name="init_yaw" default="-90.0"/>
