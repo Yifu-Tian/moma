@@ -38,7 +38,7 @@ int main(int argc, char **argv)
   ros::NodeHandle nh("~");
 
   std::vector<double> port_surface_position{ -0.60, 0.25, 0.45 };
-  std::vector<double> goal_position{ -0.60, 0.05, 0.45 };
+  std::vector<double> goal_position{ -0.60, 0.20, 0.45 };
   std::vector<double> port_normal{ 0.0, -1.0, 0.0 };
   nh.param<std::vector<double>>("charging_demo/port_surface_position", port_surface_position, port_surface_position);
   nh.param<std::vector<double>>("charging_demo/goal_position", goal_position, goal_position);
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
   visualization_msgs::MarkerArray markers;
   {
     auto port = makeMarkerBase("charging_port", 0, visualization_msgs::Marker::CUBE, frame_id);
-    const double port_length = std::max(0.05, std::abs(py - gy));
+    const double port_length = std::max(0.015, std::abs(py - gy));
     port.pose.position = makePoint(0.5 * (px + gx), 0.5 * (py + gy), 0.5 * (pz + gz));
     port.scale.x = 0.08;
     port.scale.y = port_length;

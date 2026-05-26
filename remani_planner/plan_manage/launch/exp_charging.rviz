@@ -60,20 +60,37 @@ Visualization Manager:
     - Class: rviz/Group
       Displays:
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /model_vis/vis_mm
           Name: mm_vis
           Namespaces:
             vis_mm_odom: true
-          Queue Size: 100
+          Queue Size: 1
+          Value: false
+        - Alpha: 1
+          Class: rviz/RobotModel
+          Collision Enabled: false
+          Enabled: true
+          Links:
+            All Links Enabled: true
+            Expand Joint Details: false
+            Expand Link Details: false
+            Expand Tree: false
+            Link Tree Style: Links in Alphabetic Order
+          Name: moma_robot
+          Robot Alpha: 1
+          Robot Description: robot_description
+          TF Prefix: ""
+          Update Interval: 0
           Value: true
+          Visual Enabled: true
         - Class: rviz/MarkerArray
           Enabled: true
           Marker Topic: /charging_demo/markers
           Name: charging_port
           Namespaces:
             charging_port: true
-          Queue Size: 10
+          Queue Size: 1
           Value: true
         - Class: rviz/Group
           Displays:
@@ -83,7 +100,7 @@ Visualization Manager:
               Name: start&goal
               Namespaces:
                 {}
-              Queue Size: 100
+              Queue Size: 1
               Value: false
             - Class: rviz/MarkerArray
               Enabled: false
@@ -91,16 +108,16 @@ Visualization Manager:
               Name: "[Car&Mani] Front End Mesh"
               Namespaces:
                 {}
-              Queue Size: 100
+              Queue Size: 1
               Value: false
             - Class: rviz/MarkerArray
-              Enabled: true
+              Enabled: false
               Marker Topic: /remani_planner_node/back_end_mm_mesh_vis
               Name: "[Car&Mani] Back End Mesh"
               Namespaces:
                 {}
-              Queue Size: 100
-              Value: true
+              Queue Size: 1
+              Value: false
             - Alpha: 1
               Autocompute Intensity Bounds: true
               Autocompute Value Bounds:
@@ -119,8 +136,8 @@ Visualization Manager:
               Min Color: 0; 0; 0
               Name: simulation_map
               Position Transformer: XYZ
-              Queue Size: 10
-              Selectable: true
+              Queue Size: 1
+              Selectable: false
               Size (Pixels): 1.2999999523162842
               Size (m): 0.02500000037252903
               Style: Squares

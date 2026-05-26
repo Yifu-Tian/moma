@@ -5,10 +5,10 @@
   <arg name="init_y" default="0.0"/>
   <arg name="init_yaw" default="0.0"/>
   <arg name="init_j1" default="0.0"/>
-  <arg name="init_j2" default="-70.0"/>
-  <arg name="init_j3" default="110.0"/>
+  <arg name="init_j2" default="-120.0"/>
+  <arg name="init_j3" default="140.0"/>
   <arg name="init_j4" default="0.0"/>
-  <arg name="init_j5" default="-110.0"/>
+  <arg name="init_j5" default="-90.0"/>
   <arg name="init_j6" default="0.0"/>
 
   <include file="$(find remani_planner)/launch/run_in_sim.launch">

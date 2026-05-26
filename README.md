@@ -10,8 +10,9 @@ The code is based on the original REMANI-Planner project. The charging demo adds
 - a deterministic charging scene map;
 - a visible charger and target marker;
 - one normal start scenario and one obstacle-blocked start scenario;
-- command-line launch arguments for the initial base pose;
-- 
+- command-line launch arguments for switching normal and blocked initial poses;
+- an optional lightweight 2D MP4 recorder, so the demo can be checked without RViz.
+
 ## Quick Start
 
 Tested environment:
@@ -57,7 +58,8 @@ targets that are not required by this demo.
 
 ## Recommended Evaluation Commands
 
-These commands are the preferred pair for checking the demo. The first case starts
+These commands are the preferred pair for checking the demo. Both use the same
+recording launch file; only the initial base pose changes. The first case starts
 from an open approach pose. The second case starts above the upper vehicle, so
 the target is partially blocked by the obstacle layout and the base must move
 around before the arm reaches the charger.
@@ -70,7 +72,11 @@ source devel/setup.bash
 roslaunch remani_planner exp_charging_record.launch record_duration:=25.0
 
 # Case 2: obstacle-blocked start, no RViz, record a top-down MP4.
-roslaunch remani_planner exp_charging_blocked_record.launch record_duration:=35.0
+roslaunch remani_planner exp_charging_record.launch \
+  init_x:=-1.30 \
+  init_y:=1.15 \
+  init_yaw:=-90 \
+  record_duration:=35.0
 ```
 
 Each run prints the final base position, final end-effector position, target
@@ -96,7 +102,10 @@ Obstacle-blocked start scenario:
 ```bash
 cd ~/moma_ws
 source devel/setup.bash
-roslaunch remani_planner exp_charging_blocked.launch
+roslaunch remani_planner exp_charging.launch \
+  init_x:=-1.30 \
+  init_y:=1.15 \
+  init_yaw:=-90
 ```
 
 The demo auto-triggers the target after a short delay. In RViz, the blue cuboid is
@@ -117,7 +126,11 @@ Blocked-start scenario:
 ```bash
 cd ~/moma_ws
 source devel/setup.bash
-roslaunch remani_planner exp_charging_blocked_record.launch record_duration:=35.0
+roslaunch remani_planner exp_charging_record.launch \
+  init_x:=-1.30 \
+  init_y:=1.15 \
+  init_yaw:=-90 \
+  record_duration:=35.0
 ```
 
 Videos are written to:
@@ -175,7 +188,7 @@ The two cuboid vehicles are approximately:
 For a blocked-start test, a useful initial pose is:
 
 ```bash
-roslaunch remani_planner exp_charging_blocked.launch \
+roslaunch remani_planner exp_charging.launch \
   init_x:=-1.30 \
   init_y:=1.15 \
   init_yaw:=-90
@@ -188,12 +201,9 @@ roslaunch remani_planner exp_charging_blocked.launch \
   `remani_planner/plan_manage/src/charging_demo_helper.cpp`
 - Demo configs:
   `remani_planner/plan_manage/config/exp_charging_param.yaml`
-  `remani_planner/plan_manage/config/exp_charging_blocked_param.yaml`
 - Demo launch files:
   `remani_planner/plan_manage/launch/exp_charging.launch`
-  `remani_planner/plan_manage/launch/exp_charging_blocked.launch`
   `remani_planner/plan_manage/launch/exp_charging_record.launch`
-  `remani_planner/plan_manage/launch/exp_charging_blocked_record.launch`
 - 2D recorder:
   `remani_planner/plan_manage/scripts/charging_scene_recorder.py`
 

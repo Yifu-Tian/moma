@@ -112,6 +112,9 @@ namespace remani_planner
         double mani_safe_margin_;
         double self_safe_margin_;
         double ground_safe_dis_;
+        bool allow_charging_port_contact_;
+        double charging_port_contact_radius_;
+        Eigen::Vector3d charging_port_surface_position_, charging_port_goal_position_;
         double mobile_base_max_vel_, mobile_base_max_acc_;
 
         Eigen::Matrix2d B_h_;
@@ -133,6 +136,7 @@ namespace remani_planner
         void visCarCheckBall(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &state);
         void visManiCheckBall(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state);
         void visMesh(ros::Publisher &pub, int id, std::string ns, double alpha, Eigen::Vector3d color_rgb, const Eigen::Matrix4d &T, const std::string &mesh_file);
+        bool isAllowedChargingPortContact(const Eigen::Vector3d &point) const;
         
         visualization_msgs::MarkerArray getCarMarkerArray(std::string ns, int idx, double alpha, const Eigen::Vector3d &state);
         visualization_msgs::MarkerArray getManiMarkerArray(std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state, const bool &gripper_close);

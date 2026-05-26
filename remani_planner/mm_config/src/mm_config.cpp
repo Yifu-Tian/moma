@@ -31,6 +31,22 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     nh.param("optimization/safe_margin_mani", mani_safe_margin_, -1.0);
     nh.param("optimization/self_safe_margin", self_safe_margin_, -1.0);
     nh.param("optimization/ground_safe_dis", ground_safe_dis_, 0.1);
+    nh.param("charging_demo/allow_port_contact", allow_charging_port_contact_, false);
+    nh.param("charging_demo/port_contact_radius", charging_port_contact_radius_, 0.12);
+    std::vector<double> charging_port_surface_position{-0.60, 0.25, 0.45};
+    std::vector<double> charging_port_goal_position{-0.60, 0.20, 0.45};
+    nh.param<std::vector<double>>("charging_demo/port_surface_position",
+                                  charging_port_surface_position,
+                                  charging_port_surface_position);
+    nh.param<std::vector<double>>("charging_demo/goal_position",
+                                  charging_port_goal_position,
+                                  charging_port_goal_position);
+    charging_port_surface_position_ << charging_port_surface_position[0],
+                                       charging_port_surface_position[1],
+                                       charging_port_surface_position[2];
+    charging_port_goal_position_ << charging_port_goal_position[0],
+                                    charging_port_goal_position[1],
+                                    charging_port_goal_position[2];
 
     manipulator_min_pos_.resize(manipulator_dof_);
     manipulator_max_pos_.resize(manipulator_dof_);
@@ -590,6 +606,20 @@ void MMConfig::getJointTMat(const Eigen::VectorXd &theta, std::vector<Eigen::Mat
     }
 }
 
+bool MMConfig::isAllowedChargingPortContact(const Eigen::Vector3d &point) const{
+    if(!allow_charging_port_contact_){
+        return false;
+    }
+    const Eigen::Vector3d port_axis = charging_port_goal_position_ - charging_port_surface_position_;
+    const double axis_len_sq = port_axis.squaredNorm();
+    if(axis_len_sq < 1e-8){
+        return (point - charging_port_goal_position_).norm() < charging_port_contact_radius_;
+    }
+    const double t = std::max(0.0, std::min(1.0, (point - charging_port_surface_position_).dot(port_axis) / axis_len_sq));
+    const Eigen::Vector3d closest = charging_port_surface_position_ + t * port_axis;
+    return (point - closest).norm() < charging_port_contact_radius_;
+}
+
 bool MMConfig::checkCarObsCollision(Eigen::Vector3d car_state, bool precise, bool safe, double &min_dist){
     std::vector<Eigen::Vector3d> car_pts;
     car_pts.clear();
@@ -645,7 +675,7 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
             }
             dist = grid_map_->getPreciseDistance(pt_on_link);
             // dist = grid_map_->getDistance(pt_on_link);
-            if(dist < safe_dist){
+            if(dist < safe_dist && !isAllowedChargingPortContact(pt_on_link)){
                 sphere_occ_.points.push_back(pt);
                 min_dist = dist;
                 return true;
