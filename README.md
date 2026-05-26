@@ -11,8 +11,7 @@ The code is based on the original REMANI-Planner project. The charging demo adds
 - a visible charger and target marker;
 - one normal start scenario and one obstacle-blocked start scenario;
 - command-line launch arguments for the initial base pose;
-- an optional lightweight 2D MP4 recorder, so the demo can be checked without RViz.
-
+- 
 ## Quick Start
 
 Tested environment:
