@@ -18,6 +18,14 @@
     <arg name="init_j4" default="0.0"/>
     <arg name="init_j5" default="-90.0"/>
     <arg name="init_j6" default="0.0"/>
+    <arg name="arm_activation_enabled" default="true"/>
+    <arg name="weight_arm_activation" default="0.8"/>
+    <arg name="weight_arm_activation_vel" default="0.05"/>
+    <arg name="arm_activation_full_dist" default="1.20"/>
+    <arg name="arm_activation_release_dist" default="0.35"/>
+    <arg name="arm_activation_clearance_dist" default="0.55"/>
+    <arg name="arm_activation_clearance_release_dist" default="0.25"/>
+    <arg name="arm_activation_collision_skip_weight" default="0.85"/>
 
     <arg name="generate_map_size_x" default="8"/>
     <arg name="generate_map_size_y" default="8"/>
@@ -47,6 +55,14 @@
       <arg name="init_j4" value="$(arg init_j4)"/>
       <arg name="init_j5" value="$(arg init_j5)"/>
       <arg name="init_j6" value="$(arg init_j6)"/>
+      <arg name="arm_activation_enabled" value="$(arg arm_activation_enabled)"/>
+      <arg name="weight_arm_activation" value="$(arg weight_arm_activation)"/>
+      <arg name="weight_arm_activation_vel" value="$(arg weight_arm_activation_vel)"/>
+      <arg name="arm_activation_full_dist" value="$(arg arm_activation_full_dist)"/>
+      <arg name="arm_activation_release_dist" value="$(arg arm_activation_release_dist)"/>
+      <arg name="arm_activation_clearance_dist" value="$(arg arm_activation_clearance_dist)"/>
+      <arg name="arm_activation_clearance_release_dist" value="$(arg arm_activation_clearance_release_dist)"/>
+      <arg name="arm_activation_collision_skip_weight" value="$(arg arm_activation_collision_skip_weight)"/>
       <arg name="camera_pose_topic" value="pcl_render_node/camera_pose"/>
       <arg name="depth_topic" value="pcl_render_node/depth"/>
       <!-- topic of point cloud measurement, such as from LIDAR  -->

@@ -20,6 +20,14 @@ namespace remani_planner
     wei_mani_obs_ = wei_obs_ / 5.0;
     nh.param("optimization/weight_manipulator_self", wei_mani_self_, -1.0);
     nh.param("optimization/weight_manipulator_feasibility", wei_mani_feas_, -1.0);
+    nh.param("optimization/arm_activation_enabled", arm_activation_enabled_, false);
+    nh.param("optimization/weight_arm_activation", wei_arm_activation_, 0.0);
+    nh.param("optimization/weight_arm_activation_vel", wei_arm_activation_vel_, 0.0);
+    nh.param("optimization/arm_activation_full_dist", arm_activation_full_dist_, 1.2);
+    nh.param("optimization/arm_activation_release_dist", arm_activation_release_dist_, 0.35);
+    nh.param("optimization/arm_activation_clearance_dist", arm_activation_clearance_dist_, 0.55);
+    nh.param("optimization/arm_activation_clearance_release_dist", arm_activation_clearance_release_dist_, 0.25);
+    nh.param("optimization/arm_activation_collision_skip_weight", arm_activation_collision_skip_weight_, 0.85);
 
     nh.param("optimization/dense_sample_resolution", dense_sample_resolution_, -1);
 
@@ -59,6 +67,12 @@ namespace remani_planner
     }
     nh.param("mm/manipulator_max_vel", max_joint_vel_, -1.0);
     nh.param("mm/manipulator_max_acc", max_joint_acc_, -1.0);
+    std::vector<double> folded_deg;
+    nh.getParam("optimization/arm_activation_folded_deg", folded_deg);
+    arm_activation_folded_ = Eigen::VectorXd::Zero(manipulator_dof_);
+    for(int i = 0; i < manipulator_dof_ && i < (int)folded_deg.size(); ++i){
+      arm_activation_folded_(i) = folded_deg[i] / 180.0 * M_PI;
+    }
 
     firs_plot_ = true;
 
@@ -679,8 +693,12 @@ namespace remani_planner
         double cost_car = 0;
         double cost_mani = 0;
         double cost_self = 0;
+        double arm_activation_w = armActivationWeight(pos, vel, trajid);
+        bool skip_manipulator_collision = arm_activation_enabled_ &&
+                                          arm_activation_w >= arm_activation_collision_skip_weight_;
         
-        if(obstacleGradCostforMM(i_dp, pos, vel, trajid, gradp, gradv, cost_car, cost_mani, cost_self))
+        if(obstacleGradCostforMM(i_dp, pos, vel, trajid, skip_manipulator_collision,
+                                 gradp, gradv, cost_car, cost_mani, cost_self))
         {
           gradp_traj_piece += gradp;
           gradViolaPc = beta0 * gradp.transpose();
@@ -823,6 +841,23 @@ namespace remani_planner
 
           costs(4) += omg * step * cost_joint_feasible;
         }
+        // Progressive arm activation. Far from the final docking pose, the arm is softly
+        // biased toward a folded posture; the bias fades as the base approaches the goal.
+        gradp.setZero(); gradv.setZero();
+        double cost_arm_activation = 0.0;
+        if(armActivationGradCost(pos, vel, trajid, gradp, gradv, cost_arm_activation)){
+          gradViolaPc = beta0 * gradp.transpose();
+          gradViolaPt = alpha * gradp.transpose() * vel;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaPc;
+          gdT(i) += omg * (cost_arm_activation / K + step * gradViolaPt);
+
+          gradViolaVc = beta1 * gradv.transpose();
+          gradViolaVt = alpha * gradv.transpose() * acc;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaVc;
+          gdT(i) += omg * step * gradViolaVt;
+
+          costs(5) += omg * step * cost_arm_activation;
+        }
         s1 += step;
         if (j != K || (j == K && i == N - 1)){
           ++i_dp;
@@ -835,6 +870,7 @@ namespace remani_planner
                                             const Eigen::VectorXd &pos,
                                             const Eigen::VectorXd &vel,
                                             const int trajid,
+                                            const bool skip_manipulator_collision,
                                             Eigen::VectorXd &gradp,
                                             Eigen::VectorXd &gradv,
                                             double &costp,
@@ -877,7 +913,7 @@ namespace remani_planner
       }
     }
 
-    if(manipulator_dof_ < 1) return ret;
+    if(manipulator_dof_ < 1 || skip_manipulator_collision) return ret;
     Eigen::Matrix4d T_w_q = Eigen::Matrix4d::Identity(), T_w_q_grad_x, T_w_q_grad_y;
     Eigen::Matrix2d R = mm_config_->calR(vel.head(2), singul_container_[trajid]);
     T_w_q.block(0, 0, 2, 2) = R;
@@ -1186,6 +1222,84 @@ namespace remani_planner
     }
 
     return ret;
+  }
+
+  double PolyTrajOptimizer::baseClearanceWeight(const Eigen::VectorXd &pos,
+                                                const Eigen::VectorXd &vel,
+                                                const int trajid)
+  {
+    if(arm_activation_clearance_dist_ <= arm_activation_clearance_release_dist_){
+      return 1.0;
+    }
+
+    std::vector<Eigen::Vector3d> car_pts;
+    std::vector<Eigen::Vector2d> car_dPtsdYaw_list;
+    mm_config_->getCarPtsGradNew(pos.head(2), vel.head(2), singul_container_[trajid],
+                                 Eigen::Vector3d(0, 0, 0), car_pts, car_dPtsdYaw_list);
+
+    double min_dist = std::numeric_limits<double>::infinity();
+    for(const auto &pt : car_pts){
+      double dist = 0.0;
+      Eigen::Vector3d dist_grad;
+      grid_map_->evaluateEDTWithGrad(pt, dist, dist_grad);
+      min_dist = std::min(min_dist, dist);
+    }
+    if(!std::isfinite(min_dist)){
+      return 1.0;
+    }
+
+    double denom = std::max(1.0e-3, arm_activation_clearance_dist_ - arm_activation_clearance_release_dist_);
+    double ratio = (min_dist - arm_activation_clearance_release_dist_) / denom;
+    ratio = std::min(1.0, std::max(0.0, ratio));
+    return ratio * ratio * (3.0 - 2.0 * ratio);
+  }
+
+  double PolyTrajOptimizer::armActivationWeight(const Eigen::VectorXd &pos,
+                                                const Eigen::VectorXd &vel,
+                                                const int trajid)
+  {
+    if(!arm_activation_enabled_ || manipulator_dof_ <= 0){
+      return 0.0;
+    }
+
+    Eigen::VectorXd goal = finState_container_[trajid].col(0);
+    double dist = (pos.head(mobile_base_dof_) - goal.head(mobile_base_dof_)).norm();
+    double denom = std::max(1.0e-3, arm_activation_full_dist_ - arm_activation_release_dist_);
+    double ratio = (dist - arm_activation_release_dist_) / denom;
+    ratio = std::min(1.0, std::max(0.0, ratio));
+    double w_dist = ratio * ratio * (3.0 - 2.0 * ratio);
+    double w_clearance = baseClearanceWeight(pos, vel, trajid);
+    return w_dist * w_clearance;
+  }
+
+  bool PolyTrajOptimizer::armActivationGradCost(const Eigen::VectorXd &pos,
+                                                 const Eigen::VectorXd &vel,
+                                                 const int trajid,
+                                                 Eigen::VectorXd &gradp,
+                                                 Eigen::VectorXd &gradv,
+                                                 double &cost_arm_activation)
+  {
+    if(!arm_activation_enabled_ || wei_arm_activation_ <= 0.0 || manipulator_dof_ <= 0){
+      return false;
+    }
+
+    double w = armActivationWeight(pos, vel, trajid);
+    if(w <= 1.0e-6){
+      return false;
+    }
+
+    Eigen::VectorXd q_ref = arm_activation_folded_;
+    if(q_ref.size() != manipulator_dof_){
+      q_ref = Eigen::VectorXd::Zero(manipulator_dof_);
+    }
+    Eigen::VectorXd q_err = pos.tail(manipulator_dof_) - q_ref;
+    Eigen::VectorXd qd = vel.tail(manipulator_dof_);
+
+    cost_arm_activation = wei_arm_activation_ * w * q_err.squaredNorm()
+                        + wei_arm_activation_vel_ * w * qd.squaredNorm();
+    gradp.tail(manipulator_dof_) += 2.0 * wei_arm_activation_ * w * q_err;
+    gradv.tail(manipulator_dof_) += 2.0 * wei_arm_activation_vel_ * w * qd;
+    return true;
   }
 
   int PolyTrajOptimizer::astarWithMinTraj(const Eigen::MatrixXd &iniState,

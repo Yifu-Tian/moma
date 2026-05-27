@@ -105,6 +105,15 @@ namespace remani_planner
     double wei_mani_obs_;                    // manipulator obstacle weight
     double wei_mani_self_;                   // manipulator self collision weight
     double wei_mani_feas_;                   // manipulator feasibility weight
+    bool arm_activation_enabled_;
+    double wei_arm_activation_;
+    double wei_arm_activation_vel_;
+    double arm_activation_full_dist_;
+    double arm_activation_release_dist_;
+    double arm_activation_clearance_dist_;
+    double arm_activation_clearance_release_dist_;
+    double arm_activation_collision_skip_weight_;
+    Eigen::VectorXd arm_activation_folded_;
 
     int dense_sample_resolution_;
     
@@ -209,6 +218,7 @@ namespace remani_planner
                                 const Eigen::VectorXd &pos,
                                 const Eigen::VectorXd &vel,
                                 const int trajid,
+                                const bool skip_manipulator_collision,
                                 Eigen::VectorXd &gradp,
                                 Eigen::VectorXd &gradv,
                                 double &costp,
@@ -222,6 +232,10 @@ namespace remani_planner
     bool feasibilityGradCostJoint(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const Eigen::VectorXd &acc, 
                                   Eigen::VectorXd &gradp, Eigen::VectorXd &gradv, Eigen::VectorXd &grada,
                                   double &cost_joint_feasible);
+    double baseClearanceWeight(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const int trajid);
+    double armActivationWeight(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const int trajid);
+    bool armActivationGradCost(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const int trajid,
+                               Eigen::VectorXd &gradp, Eigen::VectorXd &gradv, double &cost_arm_activation);
     bool IsTrajSafe(const SingulTrajData &traj_data);
     bool IsNotFeasibie(const SingulTrajData &traj_data, double t);
 

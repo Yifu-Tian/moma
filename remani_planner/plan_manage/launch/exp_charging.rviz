@@ -92,6 +92,14 @@ Visualization Manager:
             charging_port: true
           Queue Size: 1
           Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /arm_affordance/switch_marker
+          Name: whole_body_start
+          Namespaces:
+            arm_affordance_switch: true
+          Queue Size: 1
+          Value: true
         - Class: rviz/Group
           Displays:
             - Class: rviz/Marker

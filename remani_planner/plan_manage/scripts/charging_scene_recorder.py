@@ -123,7 +123,7 @@ class ChargingSceneRecorder:
             pos = (marker.pose.position.x, marker.pose.position.y, marker.pose.position.z)
             if part == 0:
                 base_by_step[step] = pos
-            elif part in (18, 19, 20):
+            elif part in (19, 20):
                 gripper_by_step.setdefault(step, []).append(pos)
 
         base_path = [base_by_step[k] for k in sorted(base_by_step.keys())]
@@ -325,10 +325,11 @@ class ChargingSceneRecorder:
 
     @staticmethod
     def end_effector_position(robot_markers):
-        # For FastArmer with idx=0, gripper mesh ids are 18/19/20.
-        # Use the gripper center when available. Falling back to the highest
-        # marker keeps the recorder usable for other manipulators.
-        gripper = [m for m in robot_markers if m.id in (18, 19, 20)]
+        # For Piper, ids 19/20 are the two fingers. Their midpoint is a more
+        # useful contact proxy than averaging with the gripper base.
+        gripper = [m for m in robot_markers if m.id in (19, 20)]
+        if len(gripper) < 2:
+            gripper = [m for m in robot_markers if m.id in (18, 19, 20)]
         if gripper:
             x = sum(m.pose.position.x for m in gripper) / len(gripper)
             y = sum(m.pose.position.y for m in gripper) / len(gripper)

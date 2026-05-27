@@ -28,6 +28,14 @@
 	<arg name="init_j4"/>
 	<arg name="init_j5"/>
 	<arg name="init_j6"/>
+	<arg name="arm_activation_enabled" default="true"/>
+	<arg name="weight_arm_activation" default="0.8"/>
+	<arg name="weight_arm_activation_vel" default="0.05"/>
+	<arg name="arm_activation_full_dist" default="1.20"/>
+	<arg name="arm_activation_release_dist" default="0.35"/>
+	<arg name="arm_activation_clearance_dist" default="0.55"/>
+	<arg name="arm_activation_clearance_release_dist" default="0.25"/>
+	<arg name="arm_activation_collision_skip_weight" default="0.85"/>
   
   <!-- main node -->
   	<node pkg="remani_planner" name="remani_planner_node" type="remani_planner_node" output="screen">
@@ -36,6 +44,14 @@
 		<rosparam file="$(arg exp_param_file)"/>
 		<rosparam param="fsm/init_state" subst_value="true">[$(arg init_x), $(arg init_y), $(arg init_j1), $(arg init_j2), $(arg init_j3), $(arg init_j4), $(arg init_j5), $(arg init_j6)]</rosparam>
 		<param name="fsm/init_yaw" value="$(arg init_yaw)"/>
+		<param name="optimization/arm_activation_enabled" value="$(arg arm_activation_enabled)"/>
+		<param name="optimization/weight_arm_activation" value="$(arg weight_arm_activation)"/>
+		<param name="optimization/weight_arm_activation_vel" value="$(arg weight_arm_activation_vel)"/>
+		<param name="optimization/arm_activation_full_dist" value="$(arg arm_activation_full_dist)"/>
+		<param name="optimization/arm_activation_release_dist" value="$(arg arm_activation_release_dist)"/>
+		<param name="optimization/arm_activation_clearance_dist" value="$(arg arm_activation_clearance_dist)"/>
+		<param name="optimization/arm_activation_clearance_release_dist" value="$(arg arm_activation_clearance_release_dist)"/>
+		<param name="optimization/arm_activation_collision_skip_weight" value="$(arg arm_activation_collision_skip_weight)"/>
 
 		<remap from="~gripper_cmd" to="$(arg gripper_cmd_topic)"/>
 		<remap from="~gripper_state" to="$(arg gripper_state_topic)"/>

@@ -192,7 +192,7 @@ int main (int argc, char** argv)
 	_last_joint_state.effort = joint_effort;
 
 	car_cmd_sub     = nh.subscribe("/mm_controller_node/car_cmd", 1, rcvCarVelCmdCallBack);
-	joint_cmd_sub   = nh.subscribe("/mm_controller_node/joint_cmd", 1, rcvJointCmdCallBack);
+	joint_cmd_sub   = nh.subscribe("joint_cmd", 1, rcvJointCmdCallBack);
 	gripper_cmd_sub   = nh.subscribe("gripper_cmd", 1, rcvGripperCmdCallBack);
 	car_odom_pub    = nh.advertise<nav_msgs::Odometry>("odometry", 1);
 	joint_state_pub = nh.advertise<sensor_msgs::JointState>("joint_state", 1);

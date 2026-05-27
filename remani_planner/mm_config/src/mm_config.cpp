@@ -78,11 +78,20 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     T_q_0_(1, 3) = base_mani_fixed_joint_xyz_ypr[1];
     T_q_0_(2, 3) = base_mani_fixed_joint_xyz_ypr[2];
 
+    nh.param("mm/use_piper", usePiper_, false);
     nh.param("mm/use_fast_armer", useFastArmer_, true);
+    nh.param("mm/use_fw_mini", useFwMini_, false);
+    if(usePiper_){
+        useFastArmer_ = false;
+    }
 
     std::string mesh_path = ros::package::getPath("mm_config")  + "/meshes/";
 
-    mesh_resource_mobile_base_ = "file://" + mesh_path + "mobile_base.STL";
+    if(useFwMini_){
+        mesh_resource_mobile_base_ = "file://" + mesh_path + "FW-MINI-model.stl";
+    }else{
+        mesh_resource_mobile_base_ = "file://" + mesh_path + "mobile_base.STL";
+    }
 
     mesh_resource_fastarmer_base0_ = "file://" + mesh_path + "FastArmer/base_link.STL";
     mesh_resource_fastarmer_link1_ = "file://" + mesh_path + "FastArmer/link1.STL";
@@ -103,13 +112,19 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     mesh_resource_ur5_wrist2_   = "file://" + mesh_path + "ur5/wrist2.dae";
     mesh_resource_ur5_wrist3_   = "file://" + mesh_path + "ur5/wrist3.dae";
 
+    mesh_resource_piper_base_         = "file://" + mesh_path + "piper/meshes/base_link.STL";
+    mesh_resource_piper_link1_        = "file://" + mesh_path + "piper/meshes/link1.STL";
+    mesh_resource_piper_link2_        = "file://" + mesh_path + "piper/meshes/link2.STL";
+    mesh_resource_piper_link3_        = "file://" + mesh_path + "piper/meshes/link3.STL";
+    mesh_resource_piper_link4_        = "file://" + mesh_path + "piper/meshes/link4.STL";
+    mesh_resource_piper_link5_        = "file://" + mesh_path + "piper/meshes/link5.STL";
+    mesh_resource_piper_link6_        = "file://" + mesh_path + "piper/meshes/link6.STL";
+    mesh_resource_piper_gripper_base_ = "file://" + mesh_path + "piper/meshes/gripper_base.STL";
+    mesh_resource_piper_link7_        = "file://" + mesh_path + "piper/meshes/link7.STL";
+    mesh_resource_piper_link8_        = "file://" + mesh_path + "piper/meshes/link8.STL";
+
     B_h_ << 0.0, -1.0,
             1.0,  0.0;
-
-    T_q_0_ << 1.0, 0  , 0  , 0.03,
-                0  , 1.0, 0  , -0.02,
-                0  , 0  , 1.0, mobile_base_height_,
-                0  , 0  , 0  , 1.0;
 
     vis_idx_size_ = 100;
 
@@ -160,6 +175,52 @@ void MMConfig::getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Ei
     double linkLength = manipulator_config_(joint_num);
     T = Eigen::Matrix4d::Identity();
     T_grad = Eigen::Matrix4d::Zero();
+    if(usePiper_){
+        static const double piper_alpha[6] = {0.0, -M_PI_2, 0.0, M_PI_2, -M_PI_2, M_PI_2};
+        static const double piper_a[6] = {0.0, 0.0, 0.28503, -0.02198, 0.0, 0.0};
+        static const double piper_d[6] = {0.123, 0.0, 0.0, 0.25075, 0.0, 0.091};
+        static const double piper_theta_offset[6] = {
+            0.0,
+            -172.2135102 * M_PI / 180.0,
+            -102.7827493 * M_PI / 180.0,
+            0.0,
+            0.0,
+            0.0
+        };
+        if(joint_num < 0 || joint_num >= 6){
+            ROS_ERROR("err joint_num: %d", joint_num);
+            return;
+        }
+
+        const double alpha = piper_alpha[joint_num];
+        const double a = piper_a[joint_num];
+        const double d = piper_d[joint_num];
+        const double theta_total = theta + piper_theta_offset[joint_num];
+        const double sinThetaTotal = sin(theta_total);
+        const double cosThetaTotal = cos(theta_total);
+        const double ca = cos(alpha);
+        const double sa = sin(alpha);
+
+        T(0, 0) = cosThetaTotal;
+        T(0, 1) = -sinThetaTotal;
+        T(0, 3) = a;
+        T(1, 0) = ca * sinThetaTotal;
+        T(1, 1) = ca * cosThetaTotal;
+        T(1, 2) = -sa;
+        T(1, 3) = -sa * d;
+        T(2, 0) = sa * sinThetaTotal;
+        T(2, 1) = sa * cosThetaTotal;
+        T(2, 2) = ca;
+        T(2, 3) = ca * d;
+
+        T_grad(0, 0) = -sinThetaTotal;
+        T_grad(0, 1) = -cosThetaTotal;
+        T_grad(1, 0) = ca * cosThetaTotal;
+        T_grad(1, 1) = -ca * sinThetaTotal;
+        T_grad(2, 0) = sa * cosThetaTotal;
+        T_grad(2, 1) = -sa * sinThetaTotal;
+        return;
+    }
     if(useFastArmer_){
         switch(joint_num){
             case 0:{
@@ -675,7 +736,8 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
             }
             dist = grid_map_->getPreciseDistance(pt_on_link);
             // dist = grid_map_->getDistance(pt_on_link);
-            if(dist < safe_dist && !isAllowedChargingPortContact(pt_on_link)){
+            const bool is_contact_point = usePiper_ ? (i == 5 && j >= 1) : (useFastArmer_ ? (i == 5 && j >= 5) : (i == manipulator_dof_ - 1));
+            if(dist < safe_dist && !(is_contact_point && isAllowedChargingPortContact(pt_on_link))){
                 sphere_occ_.points.push_back(pt);
                 min_dist = dist;
                 return true;
@@ -807,7 +869,49 @@ void MMConfig::setLinkPoint()
 {
     manipulator_link_pts_.clear();
     Eigen::Matrix4Xd link_pts;
-    if(useFastArmer_){
+    if(usePiper_){
+        for(int i = 0; i < manipulator_dof_; ++i){
+            switch(i){
+            case 0:{
+                link_pts.resize(4, 1);
+                link_pts.col(0) = Eigen::Vector4d(0, 0, -0.0615, 1);
+                break;
+            }
+            case 1:{
+                link_pts.resize(4, 3);
+                link_pts.col(0) = Eigen::Vector4d(0.0712575, 0.0, 0.0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0.142515, 0.0, 0.0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0.2137725, 0.0, 0.0, 1);
+                break;
+            }
+            case 2:{
+                link_pts.resize(4, 2);
+                link_pts.col(0) = Eigen::Vector4d(-0.007327, -0.083583, 0.0, 1);
+                link_pts.col(1) = Eigen::Vector4d(-0.014653, -0.167167, 0.0, 1);
+                break;
+            }
+            case 3:{
+                link_pts.resize(4, 0);
+                break;
+            }
+            case 4:{
+                link_pts.resize(4, 1);
+                link_pts.col(0) = Eigen::Vector4d(0.0, -0.0455, 0.0, 1);
+                break;
+            }
+            case 5:{
+                link_pts.resize(4, 3);
+                link_pts.col(0) = Eigen::Vector4d(0.0, 0.0, 0.04, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0.04, 0.12, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, -0.04, 0.12, 1);
+                break;
+            }
+            default:
+                break;
+            }
+            manipulator_link_pts_.push_back(link_pts);
+        }
+    }else if(useFastArmer_){
         for(int i = 0; i < manipulator_dof_; ++i){
             switch(i){
             case 0:{
@@ -915,6 +1019,16 @@ void MMConfig::setLinkPoint()
 }
 
 void MMConfig::setGripperPoint(const bool gripper_close){
+    if(usePiper_){
+        if(gripper_close){
+            manipulator_link_pts_[5].col(1) = Eigen::Vector4d(0, 0.015, 0.12, 1);
+            manipulator_link_pts_[5].col(2) = Eigen::Vector4d(0, -0.015, 0.12, 1);
+        }else{
+            manipulator_link_pts_[5].col(1) = Eigen::Vector4d(0, 0.04, 0.12, 1);
+            manipulator_link_pts_[5].col(2) = Eigen::Vector4d(0, -0.04, 0.12, 1);
+        }
+        return;
+    }
     if(!useFastArmer_) return;
     if(gripper_close){
         manipulator_link_pts_[5].col(5) = Eigen::Vector4d(0, 0.02, -0.01, 1);
@@ -1035,7 +1149,57 @@ visualization_msgs::MarkerArray MMConfig::getManiMarkerArray(std::string ns, int
 
     Eigen::Matrix4d T_now = T_q * T_q_0_;
 
-    if(useFastArmer_){
+    if(usePiper_){
+        marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 11, ns, alpha, T_now, mesh_resource_piper_base_));
+
+        Eigen::Matrix4d T_temp;
+        Eigen::Matrix4d T_temp_grad;
+        for(int i = 0; i < manipulator_dof_; ++i){
+            getAJointTran(i, theta(i), T_temp, T_temp_grad);
+            T_now = T_now * T_temp;
+            if(i == 0){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 12, ns, alpha, T_now, mesh_resource_piper_link1_));
+            }else if(i == 1){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 13, ns, alpha, T_now, mesh_resource_piper_link2_));
+            }else if(i == 2){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 14, ns, alpha, T_now, mesh_resource_piper_link3_));
+            }else if(i == 3){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 15, ns, alpha, T_now, mesh_resource_piper_link4_));
+            }else if(i == 4){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 16, ns, alpha, T_now, mesh_resource_piper_link5_));
+            }else if(i == 5){
+                marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 17, ns, alpha, T_now, mesh_resource_piper_link6_));
+            }
+        }
+
+        Eigen::Matrix4d T_gripper = T_now;
+        marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 18, ns, alpha, T_gripper, mesh_resource_piper_gripper_base_));
+
+        double joint7_pos = gripper_close ? 0.0 : 0.035;
+        double joint8_pos = gripper_close ? 0.0 : -0.035;
+
+        auto rpy_to_rotation_urdf = [](double r, double p, double y){
+            Eigen::Quaterniond quad = Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
+                                      Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
+                                      Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
+            return quad.toRotationMatrix();
+        };
+        Eigen::Matrix4d T_origin = Eigen::Matrix4d::Identity();
+        T_origin.block(0, 0, 3, 3) = rpy_to_rotation_urdf(1.5708, 0.0, 0.0);
+        T_origin(2, 3) = 0.1358;
+        Eigen::Matrix4d T_prismatic = Eigen::Matrix4d::Identity();
+        T_prismatic(2, 3) = joint7_pos;
+        Eigen::Matrix4d T_link7 = T_gripper * T_origin * T_prismatic;
+        marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 19, ns, alpha, T_link7, mesh_resource_piper_link7_));
+
+        T_origin.setIdentity();
+        T_origin.block(0, 0, 3, 3) = rpy_to_rotation_urdf(1.5708, 0.0, -3.1416);
+        T_origin(2, 3) = 0.1358;
+        T_prismatic.setIdentity();
+        T_prismatic(2, 3) = -joint8_pos;
+        Eigen::Matrix4d T_link8 = T_gripper * T_origin * T_prismatic;
+        marker_array.markers.push_back(getMarker(idx * vis_idx_size_ + 20, ns, alpha, T_link8, mesh_resource_piper_link8_));
+    }else if(useFastArmer_){
         Eigen::Matrix4d T_temp;
         T_temp.setZero();
         T_temp(3, 3) = 1.0;
