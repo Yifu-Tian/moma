@@ -214,9 +214,9 @@ namespace mani_sample{
                                                       path_fill, yaw_list_fill, t_list_fill);
     // std::cout << "test 4" << std::endl; 
     if(!status){
-      goal_gen_.seed(std::random_device{}());
-      state_gen_.seed(std::random_device{}());
-      node_gen_.seed(std::random_device{}());
+      goal_gen_.seed(random_seed_);
+      state_gen_.seed(random_seed_ + 1);
+      node_gen_.seed(random_seed_ + 2);
       return false;
     }
       
@@ -257,9 +257,9 @@ namespace mani_sample{
       q_t = it->second;
     }else{
       ROS_ERROR("find part_idx_begin, short_mani_start fail!");
-      goal_gen_.seed(std::random_device{}());
-      state_gen_.seed(std::random_device{}());
-      node_gen_.seed(std::random_device{}());
+      goal_gen_.seed(random_seed_);
+      state_gen_.seed(random_seed_ + 1);
+      node_gen_.seed(random_seed_ + 2);
       return false;
     }
     it = node_pool_.find(calculateValue(part_idx_end, short_mani_end));
@@ -267,9 +267,9 @@ namespace mani_sample{
       q_an_t = it->second;
     }else{
       ROS_ERROR("find part_idx_end, short_mani_end fail!");
-      goal_gen_.seed(std::random_device{}());
-      state_gen_.seed(std::random_device{}());
-      node_gen_.seed(std::random_device{}());
+      goal_gen_.seed(random_seed_);
+      state_gen_.seed(random_seed_ + 1);
+      node_gen_.seed(random_seed_ + 2);
       return false;
     }
     // std::cout << "test 7" << std::endl; 
@@ -1257,6 +1257,10 @@ namespace mani_sample{
     nh.param("search/goal_rate", goal_rate_, 0.4);
     nh.param("search/max_loop_num", max_loop_num_, 500);
     nh.param("search/max_mani_search_time", max_mani_search_time_, 0.1);
+    nh.param("search/random_seed", random_seed_, 0);
+    goal_gen_.seed(random_seed_);
+    state_gen_.seed(random_seed_ + 1);
+    node_gen_.seed(random_seed_ + 2);
     nh.param("optimization/self_safe_margin", self_safe_margin_, 0.1);
     nh.param("optimization/safe_margin_mani", safe_margin_mani_, 0.1);
     nh.param("mm/mobile_base_check_radius", mobile_base_check_radius_, 0.1);

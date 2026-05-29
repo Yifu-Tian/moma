@@ -82,6 +82,7 @@ namespace mani_sample {
     std::mt19937 goal_gen_;
     std::mt19937 state_gen_;
     std::mt19937 node_gen_;
+    int random_seed_;
 
     bool checkcollision(const ManiPathNodePtr& cur_state, const ManiPathNodePtr& next_state);
     int doubleIdx2int(double idx);
@@ -112,9 +113,10 @@ namespace mani_sample {
     remani_planner::RrtPlanning::Ptr rrt_plan_;
     std::shared_ptr<remani_planner::MMConfig> mm_config_;
     SampleMani():
-    goal_gen_(std::random_device{}()),
-    state_gen_(std::random_device{}()),
-    node_gen_(std::random_device{}())
+    goal_gen_(0),
+    state_gen_(1),
+    node_gen_(2),
+    random_seed_(0)
     {};
     ~SampleMani(){
       for(auto it = node_pool_.begin(); it != node_pool_.end(); ++it){

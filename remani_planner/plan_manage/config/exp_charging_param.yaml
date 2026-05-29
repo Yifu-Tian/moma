@@ -20,6 +20,10 @@ charging_demo:
   port_normal: [0.0, -1.0, 0.0]
   allow_port_contact: true
   port_contact_radius: 0.08
+  flexible_goal_enabled: true
+  flexible_goal_yaw_range: 0.80
+  flexible_goal_yaw_samples: 9
+  flexible_goal_yaw_weight: 0.15
 
 optimization:
   safe_margin: 0.03
@@ -34,6 +38,18 @@ optimization:
   arm_activation_clearance_release_dist: 0.25
   arm_activation_collision_skip_weight: 0.85
   arm_activation_folded_deg: [0.0, 60.0, -120.0, 0.0, 0.0, 0.0]
+  base_motion_regularization_enabled: false
+  weight_base_progress: 25.0
+  base_progress_margin: 0.05
+  weight_base_yaw_rate: 0.0
+  weight_base_yaw_acc: 0.0
+
+search:
+  random_seed: 2
+  base_only_frontend_enabled: true
+  base_only_release_dist: 1.20
+  base_only_check_dt: 0.05
+  base_only_max_arm_delta: 0.15
 
 mm:
   manipulator_thickness: 0.03

@@ -114,6 +114,11 @@ namespace remani_planner
     double arm_activation_clearance_release_dist_;
     double arm_activation_collision_skip_weight_;
     Eigen::VectorXd arm_activation_folded_;
+    bool base_motion_regularization_enabled_;
+    double wei_base_progress_;
+    double base_progress_margin_;
+    double wei_base_yaw_rate_;
+    double wei_base_yaw_acc_;
 
     int dense_sample_resolution_;
     
@@ -236,6 +241,11 @@ namespace remani_planner
     double armActivationWeight(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const int trajid);
     bool armActivationGradCost(const Eigen::VectorXd &pos, const Eigen::VectorXd &vel, const int trajid,
                                Eigen::VectorXd &gradp, Eigen::VectorXd &gradv, double &cost_arm_activation);
+    bool baseProgressGradCost(const Eigen::VectorXd &pos, const int trajid,
+                              Eigen::VectorXd &gradp, double &cost_base_progress);
+    bool baseYawSmoothGradCost(const Eigen::Vector2d &vel, const Eigen::Vector2d &acc, const Eigen::Vector2d &jer,
+                               Eigen::Vector2d &gradv_2d, Eigen::Vector2d &grada_2d, Eigen::Vector2d &gradj_2d,
+                               double &cost_base_yaw_smooth);
     bool IsTrajSafe(const SingulTrajData &traj_data);
     bool IsNotFeasibie(const SingulTrajData &traj_data, double t);
 

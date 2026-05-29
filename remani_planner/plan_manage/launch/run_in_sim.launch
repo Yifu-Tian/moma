@@ -26,6 +26,20 @@
     <arg name="arm_activation_clearance_dist" default="0.55"/>
     <arg name="arm_activation_clearance_release_dist" default="0.25"/>
     <arg name="arm_activation_collision_skip_weight" default="0.85"/>
+    <arg name="base_motion_regularization_enabled" default="false"/>
+    <arg name="weight_base_progress" default="25.0"/>
+    <arg name="base_progress_margin" default="0.05"/>
+    <arg name="weight_base_yaw_rate" default="0.0"/>
+    <arg name="weight_base_yaw_acc" default="0.0"/>
+    <arg name="flexible_goal_enabled" default="true"/>
+    <arg name="flexible_goal_yaw_range" default="0.80"/>
+    <arg name="flexible_goal_yaw_samples" default="9"/>
+    <arg name="flexible_goal_yaw_weight" default="0.15"/>
+    <arg name="random_seed" default="2"/>
+    <arg name="base_only_frontend_enabled" default="true"/>
+    <arg name="base_only_release_dist" default="1.20"/>
+    <arg name="base_only_check_dt" default="0.05"/>
+    <arg name="base_only_max_arm_delta" default="0.15"/>
 
     <arg name="generate_map_size_x" default="8"/>
     <arg name="generate_map_size_y" default="8"/>
@@ -63,6 +77,20 @@
       <arg name="arm_activation_clearance_dist" value="$(arg arm_activation_clearance_dist)"/>
       <arg name="arm_activation_clearance_release_dist" value="$(arg arm_activation_clearance_release_dist)"/>
       <arg name="arm_activation_collision_skip_weight" value="$(arg arm_activation_collision_skip_weight)"/>
+      <arg name="base_motion_regularization_enabled" value="$(arg base_motion_regularization_enabled)"/>
+      <arg name="weight_base_progress" value="$(arg weight_base_progress)"/>
+      <arg name="base_progress_margin" value="$(arg base_progress_margin)"/>
+      <arg name="weight_base_yaw_rate" value="$(arg weight_base_yaw_rate)"/>
+      <arg name="weight_base_yaw_acc" value="$(arg weight_base_yaw_acc)"/>
+      <arg name="flexible_goal_enabled" value="$(arg flexible_goal_enabled)"/>
+      <arg name="flexible_goal_yaw_range" value="$(arg flexible_goal_yaw_range)"/>
+      <arg name="flexible_goal_yaw_samples" value="$(arg flexible_goal_yaw_samples)"/>
+      <arg name="flexible_goal_yaw_weight" value="$(arg flexible_goal_yaw_weight)"/>
+      <arg name="random_seed" value="$(arg random_seed)"/>
+      <arg name="base_only_frontend_enabled" value="$(arg base_only_frontend_enabled)"/>
+      <arg name="base_only_release_dist" value="$(arg base_only_release_dist)"/>
+      <arg name="base_only_check_dt" value="$(arg base_only_check_dt)"/>
+      <arg name="base_only_max_arm_delta" value="$(arg base_only_max_arm_delta)"/>
       <arg name="camera_pose_topic" value="pcl_render_node/camera_pose"/>
       <arg name="depth_topic" value="pcl_render_node/depth"/>
       <!-- topic of point cloud measurement, such as from LIDAR  -->

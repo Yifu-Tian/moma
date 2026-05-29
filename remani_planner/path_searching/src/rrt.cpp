@@ -1065,6 +1065,8 @@ namespace remani_planner{
     nh.param("search/max_sample_time", max_sample_time_, 0.0);
     nh.param("search/max_loop_num", max_loop_num_, 100);
     nh.param("search/time_resolution", time_resolution_, 1.0);
+    nh.param("search/random_seed", random_seed_, 0);
+    random_gen_.seed(random_seed_ + 10);
     nh.param("optimization/self_safe_margin", self_safe_margin_, 0.1);
     nh.param("optimization/safe_margin_mani", safe_margin_mani_, 0.1);
 

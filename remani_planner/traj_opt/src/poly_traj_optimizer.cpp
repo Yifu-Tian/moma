@@ -28,6 +28,11 @@ namespace remani_planner
     nh.param("optimization/arm_activation_clearance_dist", arm_activation_clearance_dist_, 0.55);
     nh.param("optimization/arm_activation_clearance_release_dist", arm_activation_clearance_release_dist_, 0.25);
     nh.param("optimization/arm_activation_collision_skip_weight", arm_activation_collision_skip_weight_, 0.85);
+    nh.param("optimization/base_motion_regularization_enabled", base_motion_regularization_enabled_, false);
+    nh.param("optimization/weight_base_progress", wei_base_progress_, 0.0);
+    nh.param("optimization/base_progress_margin", base_progress_margin_, 0.05);
+    nh.param("optimization/weight_base_yaw_rate", wei_base_yaw_rate_, 0.0);
+    nh.param("optimization/weight_base_yaw_acc", wei_base_yaw_acc_, 0.0);
 
     nh.param("optimization/dense_sample_resolution", dense_sample_resolution_, -1);
 
@@ -743,6 +748,43 @@ namespace remani_planner
 
           costs(3) += omg * step * cost_mm_feasible;
         }
+
+        gradp.setZero();
+        double cost_base_progress = 0.0;
+        if(baseProgressGradCost(pos, trajid, gradp, cost_base_progress)){
+          gradViolaPc = beta0 * gradp.transpose();
+          gradViolaPt = alpha * gradp.transpose() * vel;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaPc;
+          gdT(i) += omg * (cost_base_progress / K + step * gradViolaPt);
+          costs(5) += omg * step * cost_base_progress;
+        }
+
+        gradv_2d.setZero(); grada_2d.setZero(); gradj_2d.setZero();
+        double cost_base_yaw_smooth = 0.0;
+        if(baseYawSmoothGradCost(vel.head(2), acc.head(2), jer.head(2),
+                                 gradv_2d, grada_2d, gradj_2d,
+                                 cost_base_yaw_smooth)){
+          gradv.setZero(); grada.setZero(); gradj.setZero();
+          gradv.head(2) = gradv_2d;
+          grada.head(2) = grada_2d;
+          gradj.head(2) = gradj_2d;
+
+          gradViolaVc = beta1 * gradv.transpose();
+          gradViolaVt = alpha * gradv.transpose() * acc;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaVc;
+          gdT(i) += omg * (cost_base_yaw_smooth / K + step * gradViolaVt);
+
+          gradViolaAc = beta2 * grada.transpose();
+          gradViolaAt = alpha * grada.transpose() * jer;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaAc;
+          gdT(i) += omg * step * gradViolaAt;
+
+          gradViolaJc = beta3 * gradj.transpose();
+          gradViolaJt = alpha * gradj.transpose() * snap;
+          SnapOpt_container_[trajid].get_gdC().block(i * 8, 0, 8, traj_dim_) += omg * step * gradViolaJc;
+          gdT(i) += omg * step * gradViolaJt;
+          costs(5) += omg * step * cost_base_yaw_smooth;
+        }
         
         // dense sampling
         double min_dense_vel = 0.1; 
@@ -1222,6 +1264,80 @@ namespace remani_planner
     }
 
     return ret;
+  }
+
+  bool PolyTrajOptimizer::baseProgressGradCost(const Eigen::VectorXd &pos,
+                                               const int trajid,
+                                               Eigen::VectorXd &gradp,
+                                               double &cost_base_progress)
+  {
+    if(!base_motion_regularization_enabled_ || wei_base_progress_ <= 0.0 || mobile_base_dof_ < 2){
+      return false;
+    }
+
+    Eigen::Vector2d start = iniState_container_[trajid].col(0).head(2);
+    Eigen::Vector2d goal = finState_container_[trajid].col(0).head(2);
+    Eigen::Vector2d axis = goal - start;
+    double axis_norm = axis.norm();
+    if(axis_norm < 1.0e-3){
+      return false;
+    }
+    axis /= axis_norm;
+
+    double overshoot = (pos.head(2) - goal).dot(axis) - base_progress_margin_;
+    if(overshoot <= 0.0){
+      return false;
+    }
+
+    cost_base_progress = wei_base_progress_ * overshoot * overshoot;
+    gradp.head(2) += 2.0 * wei_base_progress_ * overshoot * axis;
+    return true;
+  }
+
+  bool PolyTrajOptimizer::baseYawSmoothGradCost(const Eigen::Vector2d &vel,
+                                                const Eigen::Vector2d &acc,
+                                                const Eigen::Vector2d &jer,
+                                                Eigen::Vector2d &gradv_2d,
+                                                Eigen::Vector2d &grada_2d,
+                                                Eigen::Vector2d &gradj_2d,
+                                                double &cost_base_yaw_smooth)
+  {
+    if(!base_motion_regularization_enabled_ ||
+       (wei_base_yaw_rate_ <= 0.0 && wei_base_yaw_acc_ <= 0.0)){
+      return false;
+    }
+
+    const double vTv = vel.squaredNorm();
+    if(vTv < non_singul_v_ * non_singul_v_){
+      return false;
+    }
+
+    const double aTv = acc.transpose() * vel;
+    const double aTBv = acc.transpose() * B_h_ * vel;
+    const double jTBv = jer.transpose() * B_h_ * vel;
+    const double vTv_inv = 1.0 / vTv;
+    const double vTv_inv2 = vTv_inv * vTv_inv;
+
+    const double omega = aTBv * vTv_inv;
+    Eigen::Vector2d dOmegadV = B_h_.transpose() * acc / vTv
+                              - (aTBv * vel + vel.transpose() * B_h_.transpose() * acc * vel) * vTv_inv2;
+    Eigen::Vector2d dOmegadA = vTv_inv * (B_h_ * vel);
+
+    const double alpha = jTBv * vTv_inv - 2.0 * aTBv * aTv * vTv_inv2;
+    Eigen::Vector2d dAlphadV = (B_h_.transpose() * jer * vTv - 2.0 * jTBv * vel) * vTv_inv2
+                              - 2.0 * (aTBv * acc + aTv * B_h_.transpose() * acc) * vTv_inv2
+                              + 8.0 * vTv_inv2 * vTv_inv * aTBv * aTv * vel;
+    Eigen::Vector2d dAlphadA = -2.0 * vTv_inv2 * (aTv * B_h_ * vel + aTBv * vel);
+    Eigen::Vector2d dAlphadJ = B_h_ * vel * vTv_inv;
+
+    cost_base_yaw_smooth = wei_base_yaw_rate_ * omega * omega
+                         + wei_base_yaw_acc_ * alpha * alpha;
+    gradv_2d += 2.0 * wei_base_yaw_rate_ * omega * dOmegadV
+              + 2.0 * wei_base_yaw_acc_ * alpha * dAlphadV;
+    grada_2d += 2.0 * wei_base_yaw_rate_ * omega * dOmegadA
+              + 2.0 * wei_base_yaw_acc_ * alpha * dAlphadA;
+    gradj_2d += 2.0 * wei_base_yaw_acc_ * alpha * dAlphadJ;
+    return cost_base_yaw_smooth > 1.0e-10;
   }
 
   double PolyTrajOptimizer::baseClearanceWeight(const Eigen::VectorXd &pos,

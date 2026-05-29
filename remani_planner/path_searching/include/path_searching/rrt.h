@@ -90,6 +90,7 @@ namespace remani_planner{
     Eigen::Matrix4d T_q_0_;
     std::vector<Eigen::Matrix4Xd> manipulator_link_pts_;
     std::mt19937 random_gen_;
+    int random_seed_;
     std::uniform_real_distribution<double> random_dis_;
     std::normal_distribution<double> norm_dis_;
     ompl::base::StateSpacePtr dubins_curve_;
@@ -118,7 +119,8 @@ namespace remani_planner{
     public:
     std::shared_ptr<MMConfig> mm_config_;
     RrtPlanning():
-    random_gen_(std::random_device{}()),
+    random_gen_(0),
+    random_seed_(0),
     random_dis_(0.0, 1.0),
     norm_dis_(0.0, 1.0){};
     ~RrtPlanning(){

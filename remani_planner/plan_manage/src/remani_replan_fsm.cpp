@@ -26,6 +26,13 @@ namespace remani_planner
     nh.param("fsm/time_for_gripper", time_for_gripper_, -1.0);
     nh.param("fsm/global_plan", global_plan_, false);
     if(global_plan_) planning_horizen_ = 1.0e3;
+    nh.param("charging_demo/flexible_goal_enabled", charging_flexible_goal_enabled_, false);
+    nh.param("charging_demo/flexible_goal_yaw_range", charging_flexible_goal_yaw_range_, 0.0);
+    nh.param("charging_demo/flexible_goal_yaw_samples", charging_flexible_goal_yaw_samples_, 1);
+    nh.param("charging_demo/flexible_goal_yaw_weight", charging_flexible_goal_yaw_weight_, 0.2);
+    std::vector<double> charging_goal_position{-0.60, 0.20, 0.45};
+    nh.param<std::vector<double>>("charging_demo/goal_position", charging_goal_position, charging_goal_position);
+    charging_goal_xy_ << charging_goal_position[0], charging_goal_position[1];
 
     nh.param("mm/mobile_base_dof", mobile_base_dim_, -1);
     nh.param("mm/manipulator_dof", manipulator_dim_, -1);
@@ -413,7 +420,54 @@ namespace remani_planner
       planner_manager_->start_flag_ = true;
       start_pub_.publish(flag_msg);
       wpt_id_ = 0;
-      planNextWaypoint(waypoints_[wpt_id_], waypoints_yaw_[wpt_id_]);
+      Eigen::VectorXd selected_wp = waypoints_[wpt_id_];
+      double selected_yaw = waypoints_yaw_[wpt_id_];
+      if(charging_flexible_goal_enabled_ && waypoint_num_ > 0 && charging_flexible_goal_yaw_samples_ > 1){
+        const Eigen::VectorXd ref_wp = waypoints_[wpt_id_];
+        const double ref_yaw = waypoints_yaw_[wpt_id_];
+        Eigen::Matrix2d R_ref;
+        R_ref << cos(ref_yaw), -sin(ref_yaw),
+                 sin(ref_yaw),  cos(ref_yaw);
+        Eigen::Vector2d local_tip_offset = R_ref.transpose() * (charging_goal_xy_ - ref_wp.head(2));
+
+        double best_score = std::numeric_limits<double>::infinity();
+        bool found = false;
+        const int sample_num = std::max(1, charging_flexible_goal_yaw_samples_);
+        for(int i = 0; i < sample_num; ++i){
+          const double ratio = sample_num == 1 ? 0.5 : double(i) / double(sample_num - 1);
+          const double yaw = ref_yaw - charging_flexible_goal_yaw_range_
+                           + 2.0 * charging_flexible_goal_yaw_range_ * ratio;
+          Eigen::Matrix2d R;
+          R << cos(yaw), -sin(yaw),
+               sin(yaw),  cos(yaw);
+          Eigen::VectorXd candidate = ref_wp;
+          candidate.head(2) = charging_goal_xy_ - R * local_tip_offset;
+
+          int coll_type = -1;
+          if(planner_manager_->mm_config_->checkcollision(
+                 Eigen::Vector3d(candidate(0), candidate(1), yaw),
+                 candidate.tail(manipulator_dim_), false, coll_type)){
+            continue;
+          }
+
+          const double yaw_err = atan2(sin(yaw - mm_car_yaw_), cos(yaw - mm_car_yaw_));
+          const double score = (candidate.head(2) - mm_state_pos_.head(2)).squaredNorm()
+                             + charging_flexible_goal_yaw_weight_ * yaw_err * yaw_err;
+          if(score < best_score){
+            best_score = score;
+            selected_wp = candidate;
+            selected_yaw = yaw;
+            found = true;
+          }
+        }
+        if(found){
+          ROS_INFO("[charging_demo] Flexible docking goal selected: base=(%.3f, %.3f), yaw=%.1f deg.",
+                   selected_wp(0), selected_wp(1), selected_yaw * 180.0 / M_PI);
+        }else{
+          ROS_WARN("[charging_demo] No collision-free flexible docking candidate found, use reference waypoint.");
+        }
+      }
+      planNextWaypoint(selected_wp, selected_yaw);
       return;
     }
 

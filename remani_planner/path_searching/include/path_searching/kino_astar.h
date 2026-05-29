@@ -103,6 +103,11 @@ class KinoAstar{
     ros::NodeHandle nh_;
 	  int manipulator_dof_;
     int try_astar_times_;
+    bool base_only_frontend_enabled_;
+    double base_only_release_dist_;
+    double base_only_check_dt_;
+    double base_only_max_arm_delta_;
+    Eigen::VectorXd base_only_folded_;
 
     std::vector<PathNodePtr> path_node_pool_;
     NodeHashTable<PathNodePtr> expanded_nodes_;
@@ -205,6 +210,7 @@ class KinoAstar{
     double evaluateLength(const double &curt, const double &locallength, const double &localtime, const double &startV, const double &endV);
     void getFlatState(const Eigen::Vector4d &state, const Eigen::Vector2d &control_input,const int &singul,Eigen::MatrixXd &flat_state);
     Eigen::Vector3d evaluatePos(const double &t);
+    bool foldedArmPathIsSafe(double total_time);
 
     typedef shared_ptr<KinoAstar> Ptr;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

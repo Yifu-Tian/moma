@@ -44,6 +44,10 @@ void KinoAstar::setParam(ros::NodeHandle& nh, const std::shared_ptr<GridMap> &en
 
   nh.param("search/allocate_num", allocate_num_, 100000);
   nh.param("search/try_astar_times", try_astar_times_, 20);
+  nh.param("search/base_only_frontend_enabled", base_only_frontend_enabled_, false);
+  nh.param("search/base_only_release_dist", base_only_release_dist_, 1.2);
+  nh.param("search/base_only_check_dt", base_only_check_dt_, 0.05);
+  nh.param("search/base_only_max_arm_delta", base_only_max_arm_delta_, 0.15);
   nh.param("fsm/planning_horizon", planning_horizon_, 10.0);
 
   bool global_plan;
@@ -71,6 +75,12 @@ void KinoAstar::setParam(ros::NodeHandle& nh, const std::shared_ptr<GridMap> &en
 
   mani_sample_.reset(new mani_sample::SampleMani);
   mani_sample_->setParam(nh, mm_config_);
+  std::vector<double> folded_deg;
+  nh.getParam("optimization/arm_activation_folded_deg", folded_deg);
+  base_only_folded_ = Eigen::VectorXd::Zero(manipulator_dof_);
+  for(int i = 0; i < manipulator_dof_ && i < (int)folded_deg.size(); ++i){
+    base_only_folded_(i) = folded_deg[i] / 180.0 * M_PI;
+  }
   time_resolution_ = dist_resolution / max_vel_;
   max_steer_ = std::atan(mobile_base_wheel_base_ / min_turning_radius_);
 
@@ -138,6 +148,14 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
 
   std::cout << "continous_failures_count: " << continous_failures_count << "\n";
   bool start_goal_is_close = (start_pos - end_pos).head(2).norm() < 8e-2 && (start_pos - end_pos).tail(manipulator_dof_).norm() > 1e-1;
+  const double arm_delta = (start_pos - end_pos).tail(manipulator_dof_).norm();
+  const bool use_base_only_frontend = base_only_frontend_enabled_ &&
+      ((start_pos - end_pos).head(2).norm() > base_only_release_dist_) &&
+      (arm_delta < base_only_max_arm_delta_);
+  if(base_only_frontend_enabled_ && arm_delta >= base_only_max_arm_delta_){
+    ROS_INFO("[KinoAstar] base-only frontend disabled: arm target delta %.3f exceeds %.3f.",
+             arm_delta, base_only_max_arm_delta_);
+  }
   if(continous_failures_count < try_astar_times_ && (!start_goal_is_close) /*&& false*/){
     // ROS_WARN("ASTAR!");
     search(start_state, end_state, init_ctrl);
@@ -152,10 +170,8 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
     getKinoNode();
     double basetime = 0.0;
     int piece_singul_num = flat_trajs_.size();
-    std::vector<Eigen::VectorXd> pieceTimes;
-    pieceTimes.resize(piece_singul_num);
-    Eigen::VectorXi eachTrajNums;
-    eachTrajNums.resize(piece_singul_num);
+    std::vector<Eigen::VectorXd> piece_times_container;
+    piece_times_container.resize(piece_singul_num);
 
     Eigen::VectorXd state;
     state.resize(2 + manipulator_dof_);
@@ -180,6 +196,7 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
       Eigen::VectorXd piecetime;
       piecetime.resize(piece_nums);
       piecetime.setConstant(timePerPiece);
+      piece_times_container[i] = piecetime;
       res_time = 0;
       
       for(int j = 0; j < piece_nums; j++){
@@ -208,14 +225,48 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
     visPath(car_statept_disp, true);
     visPath(car_statelist_disp, false);
 
-    std::vector<Eigen::VectorXd> final_state;
-    std::vector<double> final_yaw_list, final_t_list;
-    sample_succ = mani_sample_->sampleManiSearch(true,
-        start_pos.tail(manipulator_dof_), end_pos.tail(manipulator_dof_), 
-        car_statelist, car_statelist_check, // x, y, yaw
-        init_t_list, singul_container_temp, start_singul,
-        simple_path_container, singul_container,
-        yaw_list_container, t_list_container);
+    if(use_base_only_frontend && foldedArmPathIsSafe(basetime)){
+      simple_path_container.clear();
+      yaw_list_container.clear();
+      t_list_container.clear();
+      singul_container.clear();
+      for(int i = 0; i < piece_singul_num; ++i){
+        simple_path_container.emplace_back();
+        yaw_list_container.emplace_back();
+        t_list_container.push_back(piece_times_container[i]);
+        singul_container.push_back(flat_trajs_[i].singul);
+      }
+
+      double t_cursor = 0.0;
+      for(int i = 0; i < piece_singul_num; ++i){
+        const int piece_nums_i = t_list_container[i].size();
+        for(int j = 0; j <= piece_nums_i; ++j){
+          Eigen::Vector3d base = evaluatePos(t_cursor);
+          Eigen::VectorXd full_state(2 + manipulator_dof_);
+          full_state.head(2) = base.head(2);
+          full_state.tail(manipulator_dof_) = base_only_folded_;
+          simple_path_container[i].push_back(full_state);
+          yaw_list_container[i].push_back(base(2));
+          if(j < piece_nums_i){
+            t_cursor += t_list_container[i](j);
+          }
+        }
+      }
+      sample_succ = true;
+      ROS_INFO("[KinoAstar] base-only frontend active: manipulator RRT skipped.");
+    }else{
+      if(use_base_only_frontend){
+        ROS_INFO("[KinoAstar] base-only frontend rejected: folded arm path is not collision-free.");
+      }
+      std::vector<Eigen::VectorXd> final_state;
+      std::vector<double> final_yaw_list, final_t_list;
+      sample_succ = mani_sample_->sampleManiSearch(true,
+          start_pos.tail(manipulator_dof_), end_pos.tail(manipulator_dof_), 
+          car_statelist, car_statelist_check, // x, y, yaw
+          init_t_list, singul_container_temp, start_singul,
+          simple_path_container, singul_container,
+          yaw_list_container, t_list_container);
+    }
   }else{
     std::vector<Eigen::Vector3d> car_statelist, car_statelist_check;
     std::vector<double> init_t_list;
@@ -1084,6 +1135,29 @@ Eigen::Vector3d KinoAstar::evaluatePos(const double &input_t){
     }
   }
   return localTraj.back();
+}
+
+bool KinoAstar::foldedArmPathIsSafe(double total_time){
+  if(total_time <= 0.0){
+    return false;
+  }
+
+  const double dt = std::max(base_only_check_dt_, 0.01);
+  int coll_type = -1;
+  for(double t = 0.0; t < total_time; t += dt){
+    Eigen::Vector3d base = evaluatePos(t);
+    if(mm_config_->checkcollision(base, base_only_folded_, false, coll_type)){
+      ROS_INFO("[KinoAstar] folded base-only init collides at t=%.3f, type=%d.", t, coll_type);
+      return false;
+    }
+  }
+
+  Eigen::Vector3d base = evaluatePos(std::max(total_time - 1.0e-3, 0.0));
+  if(mm_config_->checkcollision(base, base_only_folded_, false, coll_type)){
+    ROS_INFO("[KinoAstar] folded base-only init collides near end, type=%d.", coll_type);
+    return false;
+  }
+  return true;
 }
 
 } // namespace remani_planner
