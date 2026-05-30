@@ -18,7 +18,7 @@ charging_demo:
   port_surface_position: [-0.60, 0.25, 0.45]
   goal_position: [-0.60, 0.20, 0.45]
   port_normal: [0.0, -1.0, 0.0]
-  min_approach_standoff: 0.12
+  min_approach_standoff: 0.02
   allow_port_contact: true
   port_contact_radius: 0.08
   flexible_goal_enabled: true
@@ -62,7 +62,9 @@ search:
   base_only_frontend_enabled: true
   base_only_release_dist: 1.20
   base_only_check_dt: 0.05
-  base_only_max_arm_delta: 0.15
+  # Allow the base-only frontend even when the final docking IK posture differs
+  # from the folded start posture. The folded path is still collision-checked.
+  base_only_max_arm_delta: 10.0
 
 mm:
   manipulator_thickness: 0.03

@@ -44,7 +44,7 @@
 	<arg name="weight_base_yaw_acc" default="0.0"/>
 	<arg name="flexible_goal_enabled" default="true"/>
 	<arg name="ik_goal_enabled" default="true"/>
-	<arg name="min_approach_standoff" default="0.12"/>
+	<arg name="min_approach_standoff" default="0.02"/>
 	<arg name="flexible_goal_yaw_range" default="0.40"/>
 	<arg name="flexible_goal_yaw_samples" default="5"/>
 	<arg name="flexible_goal_yaw_weight" default="0.15"/>
@@ -52,7 +52,7 @@
 	<arg name="base_only_frontend_enabled" default="true"/>
 	<arg name="base_only_release_dist" default="1.20"/>
 	<arg name="base_only_check_dt" default="0.05"/>
-	<arg name="base_only_max_arm_delta" default="0.15"/>
+	<arg name="base_only_max_arm_delta" default="10.0"/>
   
   <!-- main node -->
   	<node pkg="remani_planner" name="remani_planner_node" type="remani_planner_node" output="screen">
