@@ -21,6 +21,7 @@ namespace remani_planner
     nh.param("optimization/weight_manipulator_self", wei_mani_self_, -1.0);
     nh.param("optimization/weight_manipulator_feasibility", wei_mani_feas_, -1.0);
     nh.param("optimization/arm_activation_enabled", arm_activation_enabled_, false);
+    nh.param("optimization/manipulator_safe_collision_check", manipulator_safe_collision_check_, false);
     nh.param("optimization/weight_arm_activation", wei_arm_activation_, 0.0);
     nh.param("optimization/weight_arm_activation_vel", wei_arm_activation_vel_, 0.0);
     nh.param("optimization/arm_activation_full_dist", arm_activation_full_dist_, 1.2);
@@ -450,7 +451,29 @@ namespace remani_planner
     Eigen::VectorXd pos = traj.getPos(t);
     Eigen::VectorXd vel = traj.getVel(t);
     double yaw = traj.getCarAngle(t);
-    return mm_config_->checkcollision(Eigen::Vector3d(pos(0), pos(1), yaw), pos.tail(manipulator_dof_), false, coll_type);
+    Eigen::Vector3d car_state(pos(0), pos(1), yaw);
+    Eigen::VectorXd mani_state = pos.tail(manipulator_dof_);
+    double min_dist;
+
+    if(mm_config_->checkCarObsCollision(car_state, true, false, min_dist)){
+      coll_type = 0;
+      return true;
+    }
+    if(mm_config_->checkManiObsCollision(car_state, mani_state, manipulator_safe_collision_check_, min_dist)){
+      coll_type = 1;
+      return true;
+    }
+    if(mm_config_->checkCarManiCollision(mani_state, false, min_dist)){
+      coll_type = 2;
+      return true;
+    }
+    if(mm_config_->checkManiManiCollision(mani_state, false, min_dist)){
+      coll_type = 3;
+      return true;
+    }
+
+    coll_type = -1;
+    return false;
   }
 
   /* callbacks by the L-BFGS optimizer */

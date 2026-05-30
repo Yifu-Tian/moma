@@ -67,6 +67,8 @@ target_link_libraries(charging_demo_helper
 
 catkin_install_python(PROGRAMS
   scripts/charging_scene_recorder.py
+  scripts/charging_demo_metrics.py
+  scripts/run_charging_metrics_batch.py
   scripts/moma_robot_state_bridge.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )

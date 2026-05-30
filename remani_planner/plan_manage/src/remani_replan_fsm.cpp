@@ -32,11 +32,43 @@ namespace remani_planner
     nh.param("charging_demo/flexible_goal_yaw_weight", charging_flexible_goal_yaw_weight_, 0.2);
     std::vector<double> charging_goal_position{-0.60, 0.20, 0.45};
     nh.param<std::vector<double>>("charging_demo/goal_position", charging_goal_position, charging_goal_position);
+    charging_goal_position_ << charging_goal_position[0], charging_goal_position[1], charging_goal_position[2];
     charging_goal_xy_ << charging_goal_position[0], charging_goal_position[1];
+    std::vector<double> charging_port_normal{0.0, -1.0, 0.0};
+    nh.param<std::vector<double>>("charging_demo/port_normal", charging_port_normal, charging_port_normal);
+    charging_port_normal_xy_ << charging_port_normal[0], charging_port_normal[1];
+    if(charging_port_normal_xy_.norm() < 1.0e-6){
+      charging_port_normal_xy_ << 0.0, -1.0;
+    }else{
+      charging_port_normal_xy_.normalize();
+    }
+    nh.param("charging_demo/min_approach_standoff", charging_min_approach_standoff_, 0.05);
+    nh.param("charging_demo/ik_goal_enabled", charging_ik_goal_enabled_, true);
+    nh.param("charging_demo/ik_tolerance", charging_ik_tolerance_, 0.02);
+    nh.param("charging_demo/ik_damping", charging_ik_damping_, 0.002);
+    nh.param("charging_demo/ik_step_limit", charging_ik_step_limit_, 0.25);
+    nh.param("charging_demo/ik_joint_weight", charging_ik_joint_weight_, 0.05);
+    nh.param("charging_demo/ik_reference_weight", charging_ik_reference_weight_, 0.60);
+    nh.param("charging_demo/ik_reference_yaw_weight", charging_ik_reference_yaw_weight_, 0.50);
+    nh.param("charging_demo/ik_max_iterations", charging_ik_max_iterations_, 80);
+    nh.param<std::vector<double>>("charging_demo/ik_standoff_offsets", charging_ik_standoff_offsets_,
+                                  std::vector<double>{-0.10, 0.0, 0.10});
+    nh.param<std::vector<double>>("charging_demo/ik_lateral_offsets", charging_ik_lateral_offsets_,
+                                  std::vector<double>{-0.08, 0.0, 0.08});
+    std::vector<double> charging_tip_point{0.0, 0.0, 0.12};
+    nh.param<std::vector<double>>("charging_demo/tip_point_link6", charging_tip_point, charging_tip_point);
+    charging_tip_point_link6_ << charging_tip_point[0], charging_tip_point[1], charging_tip_point[2], 1.0;
 
     nh.param("mm/mobile_base_dof", mobile_base_dim_, -1);
     nh.param("mm/manipulator_dof", manipulator_dim_, -1);
     nh.param("mm/mobile_base_non_singul_vel", mobile_base_non_singul_vel_, -1.0);
+    std::vector<double> mani_min, mani_max;
+    nh.param<std::vector<double>>("mm/manipulator_min_pos", mani_min, std::vector<double>(6, -M_PI));
+    nh.param<std::vector<double>>("mm/manipulator_max_pos", mani_max, std::vector<double>(6, M_PI));
+    manipulator_min_pos_.resize(mani_min.size());
+    manipulator_max_pos_.resize(mani_max.size());
+    for(size_t i = 0; i < mani_min.size(); ++i) manipulator_min_pos_(i) = mani_min[i];
+    for(size_t i = 0; i < mani_max.size(); ++i) manipulator_max_pos_(i) = mani_max[i];
     
 
     traj_dim_ = mobile_base_dim_ + manipulator_dim_;
@@ -407,6 +439,190 @@ namespace remani_planner
     return success;
   }
 
+  Eigen::Vector3d REMANIReplanFSM::computeChargingTipPosition(const Eigen::Vector3d &base_state,
+                                                              const Eigen::VectorXd &mani_state)
+  {
+    Eigen::Matrix4d T_car;
+    planner_manager_->mm_config_->CarState2T(base_state, T_car);
+
+    std::vector<Eigen::Matrix4d> T_joint, T_joint_grad;
+    planner_manager_->mm_config_->getJointTrans(mani_state, T_joint, T_joint_grad);
+
+    Eigen::Matrix4d T_tip = T_car * planner_manager_->mm_config_->getTq0();
+    for(size_t i = 0; i < T_joint.size(); ++i){
+      T_tip = T_tip * T_joint[i];
+    }
+
+    return (T_tip * charging_tip_point_link6_).head(3);
+  }
+
+  void REMANIReplanFSM::clampManipulatorState(Eigen::VectorXd &mani_state)
+  {
+    const int n = std::min<int>(mani_state.size(), std::min(manipulator_min_pos_.size(), manipulator_max_pos_.size()));
+    for(int i = 0; i < n; ++i){
+      mani_state(i) = std::min(std::max(mani_state(i), manipulator_min_pos_(i)), manipulator_max_pos_(i));
+    }
+  }
+
+  bool REMANIReplanFSM::solveChargingIK(const Eigen::Vector3d &base_state,
+                                        const Eigen::VectorXd &seed_state,
+                                        Eigen::VectorXd &solution,
+                                        double &tip_error)
+  {
+    Eigen::VectorXd q = seed_state;
+    clampManipulatorState(q);
+
+    constexpr double finite_diff = 1.0e-4;
+    tip_error = std::numeric_limits<double>::infinity();
+
+    for(int iter = 0; iter < charging_ik_max_iterations_; ++iter){
+      const Eigen::Vector3d tip = computeChargingTipPosition(base_state, q);
+      const Eigen::Vector3d err = charging_goal_position_ - tip;
+      tip_error = err.norm();
+      if(tip_error <= charging_ik_tolerance_){
+        solution = q;
+        return true;
+      }
+
+      Eigen::MatrixXd J(3, manipulator_dim_);
+      for(int j = 0; j < manipulator_dim_; ++j){
+        Eigen::VectorXd q_perturbed = q;
+        q_perturbed(j) += finite_diff;
+        clampManipulatorState(q_perturbed);
+        J.col(j) = (computeChargingTipPosition(base_state, q_perturbed) - tip) / finite_diff;
+      }
+
+      Eigen::Matrix3d H = J * J.transpose()
+                        + charging_ik_damping_ * Eigen::Matrix3d::Identity();
+      Eigen::VectorXd dq = J.transpose() * H.ldlt().solve(err);
+
+      const double dq_norm = dq.norm();
+      if(dq_norm > charging_ik_step_limit_ && dq_norm > 1.0e-9){
+        dq *= charging_ik_step_limit_ / dq_norm;
+      }
+
+      q += dq;
+      clampManipulatorState(q);
+    }
+
+    tip_error = (charging_goal_position_ - computeChargingTipPosition(base_state, q)).norm();
+    solution = q;
+    return tip_error <= charging_ik_tolerance_;
+  }
+
+  bool REMANIReplanFSM::selectChargingDockingGoal(Eigen::VectorXd &selected_wp, double &selected_yaw)
+  {
+    if(!charging_flexible_goal_enabled_ || waypoint_num_ <= 0){
+      return false;
+    }
+
+    const Eigen::VectorXd ref_wp = waypoints_[wpt_id_];
+    const double ref_yaw = waypoints_yaw_[wpt_id_];
+    Eigen::Matrix2d R_ref;
+    R_ref << cos(ref_yaw), -sin(ref_yaw),
+             sin(ref_yaw),  cos(ref_yaw);
+
+    const Eigen::Vector2d local_base_offset = R_ref.transpose() * (ref_wp.head(2) - charging_goal_xy_);
+    Eigen::Vector2d radial = local_base_offset;
+    if(radial.norm() < 1.0e-6){
+      radial = Eigen::Vector2d(-1.0, 0.0);
+    }else{
+      radial.normalize();
+    }
+    const Eigen::Vector2d lateral(-radial.y(), radial.x());
+
+    std::vector<Eigen::VectorXd> seeds;
+    seeds.push_back(ref_wp.tail(manipulator_dim_));
+    seeds.push_back(mm_state_pos_.tail(manipulator_dim_));
+    Eigen::VectorXd mid_seed = 0.5 * (ref_wp.tail(manipulator_dim_) + mm_state_pos_.tail(manipulator_dim_));
+    seeds.push_back(mid_seed);
+
+    double best_score = std::numeric_limits<double>::infinity();
+    double best_tip_error = std::numeric_limits<double>::infinity();
+    bool found = false;
+    const int sample_num = std::max(1, charging_flexible_goal_yaw_samples_);
+
+    for(int i = 0; i < sample_num; ++i){
+      const double ratio = sample_num == 1 ? 0.5 : double(i) / double(sample_num - 1);
+      const double yaw = ref_yaw - charging_flexible_goal_yaw_range_
+                       + 2.0 * charging_flexible_goal_yaw_range_ * ratio;
+      Eigen::Matrix2d R;
+      R << cos(yaw), -sin(yaw),
+           sin(yaw),  cos(yaw);
+
+      for(const double standoff : charging_ik_standoff_offsets_){
+        for(const double lateral_offset : charging_ik_lateral_offsets_){
+          Eigen::Vector2d local_offset = local_base_offset + standoff * radial + lateral_offset * lateral;
+          Eigen::VectorXd candidate = ref_wp;
+          candidate.head(2) = charging_goal_xy_ + R * local_offset;
+          const double approach_standoff = (candidate.head(2) - charging_goal_xy_).dot(charging_port_normal_xy_);
+          if(approach_standoff < charging_min_approach_standoff_){
+            continue;
+          }
+          const Eigen::Vector3d base_state(candidate(0), candidate(1), yaw);
+
+          for(const auto &seed : seeds){
+            Eigen::VectorXd q_solution;
+            double tip_error = std::numeric_limits<double>::infinity();
+            if(charging_ik_goal_enabled_){
+              if(!solveChargingIK(base_state, seed, q_solution, tip_error)){
+                continue;
+              }
+              candidate.tail(manipulator_dim_) = q_solution;
+            }else{
+              q_solution = candidate.tail(manipulator_dim_);
+              tip_error = (charging_goal_position_ - computeChargingTipPosition(base_state, q_solution)).norm();
+            }
+
+            int coll_type = -1;
+            if(planner_manager_->mm_config_->checkcollision(base_state, candidate.tail(manipulator_dim_), false, coll_type)){
+              continue;
+            }
+
+            const double yaw_err = atan2(sin(yaw - mm_car_yaw_), cos(yaw - mm_car_yaw_));
+            const double yaw_ref_err = atan2(sin(yaw - ref_yaw), cos(yaw - ref_yaw));
+            const double base_cost = (candidate.head(2) - mm_state_pos_.head(2)).squaredNorm();
+            const double base_ref_cost = charging_ik_reference_weight_
+                                       * (candidate.head(2) - ref_wp.head(2)).squaredNorm();
+            const double yaw_cost = charging_flexible_goal_yaw_weight_ * yaw_err * yaw_err;
+            const double yaw_ref_cost = charging_ik_reference_yaw_weight_ * yaw_ref_err * yaw_ref_err;
+            const double joint_cost = charging_ik_joint_weight_
+                                    * (candidate.tail(manipulator_dim_) - mm_state_pos_.tail(manipulator_dim_)).squaredNorm();
+            const double joint_ref_cost = charging_ik_joint_weight_
+                                        * (candidate.tail(manipulator_dim_) - ref_wp.tail(manipulator_dim_)).squaredNorm();
+            const double tip_cost = 10.0 * tip_error * tip_error;
+            const double score = base_cost + base_ref_cost + yaw_cost + yaw_ref_cost
+                               + joint_cost + joint_ref_cost + tip_cost;
+
+            if(score < best_score){
+              best_score = score;
+              best_tip_error = tip_error;
+              selected_wp = candidate;
+              selected_yaw = yaw;
+              found = true;
+            }
+          }
+        }
+      }
+    }
+
+    if(found){
+      std::stringstream q_ss;
+      q_ss << std::fixed << std::setprecision(1);
+      for(int i = 0; i < manipulator_dim_; ++i){
+        if(i > 0) q_ss << ", ";
+        q_ss << selected_wp(mobile_base_dim_ + i) * 180.0 / M_PI;
+      }
+      ROS_INFO("[charging_demo] IK docking goal selected: base=(%.3f, %.3f), yaw=%.1f deg, tip_err=%.3f m, q_deg=[%s].",
+               selected_wp(0), selected_wp(1), selected_yaw * 180.0 / M_PI,
+               best_tip_error, q_ss.str().c_str());
+      return true;
+    }
+
+    ROS_WARN("[charging_demo] No collision-free IK docking candidate found, fallback to reference waypoint.");
+    return false;
+  }
+
   // manual waypoint
   void REMANIReplanFSM::waypointCallback(const geometry_msgs::PoseStamped::ConstPtr &msg){
     
@@ -422,51 +638,7 @@ namespace remani_planner
       wpt_id_ = 0;
       Eigen::VectorXd selected_wp = waypoints_[wpt_id_];
       double selected_yaw = waypoints_yaw_[wpt_id_];
-      if(charging_flexible_goal_enabled_ && waypoint_num_ > 0 && charging_flexible_goal_yaw_samples_ > 1){
-        const Eigen::VectorXd ref_wp = waypoints_[wpt_id_];
-        const double ref_yaw = waypoints_yaw_[wpt_id_];
-        Eigen::Matrix2d R_ref;
-        R_ref << cos(ref_yaw), -sin(ref_yaw),
-                 sin(ref_yaw),  cos(ref_yaw);
-        Eigen::Vector2d local_tip_offset = R_ref.transpose() * (charging_goal_xy_ - ref_wp.head(2));
-
-        double best_score = std::numeric_limits<double>::infinity();
-        bool found = false;
-        const int sample_num = std::max(1, charging_flexible_goal_yaw_samples_);
-        for(int i = 0; i < sample_num; ++i){
-          const double ratio = sample_num == 1 ? 0.5 : double(i) / double(sample_num - 1);
-          const double yaw = ref_yaw - charging_flexible_goal_yaw_range_
-                           + 2.0 * charging_flexible_goal_yaw_range_ * ratio;
-          Eigen::Matrix2d R;
-          R << cos(yaw), -sin(yaw),
-               sin(yaw),  cos(yaw);
-          Eigen::VectorXd candidate = ref_wp;
-          candidate.head(2) = charging_goal_xy_ - R * local_tip_offset;
-
-          int coll_type = -1;
-          if(planner_manager_->mm_config_->checkcollision(
-                 Eigen::Vector3d(candidate(0), candidate(1), yaw),
-                 candidate.tail(manipulator_dim_), false, coll_type)){
-            continue;
-          }
-
-          const double yaw_err = atan2(sin(yaw - mm_car_yaw_), cos(yaw - mm_car_yaw_));
-          const double score = (candidate.head(2) - mm_state_pos_.head(2)).squaredNorm()
-                             + charging_flexible_goal_yaw_weight_ * yaw_err * yaw_err;
-          if(score < best_score){
-            best_score = score;
-            selected_wp = candidate;
-            selected_yaw = yaw;
-            found = true;
-          }
-        }
-        if(found){
-          ROS_INFO("[charging_demo] Flexible docking goal selected: base=(%.3f, %.3f), yaw=%.1f deg.",
-                   selected_wp(0), selected_wp(1), selected_yaw * 180.0 / M_PI);
-        }else{
-          ROS_WARN("[charging_demo] No collision-free flexible docking candidate found, use reference waypoint.");
-        }
-      }
+      selectChargingDockingGoal(selected_wp, selected_yaw);
       planNextWaypoint(selected_wp, selected_yaw);
       return;
     }

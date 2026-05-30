@@ -29,21 +29,24 @@
 	<arg name="init_j5"/>
 	<arg name="init_j6"/>
 	<arg name="arm_activation_enabled" default="true"/>
+	<arg name="manipulator_safe_collision_check" default="false"/>
 	<arg name="weight_arm_activation" default="0.8"/>
 	<arg name="weight_arm_activation_vel" default="0.05"/>
 	<arg name="arm_activation_full_dist" default="1.20"/>
 	<arg name="arm_activation_release_dist" default="0.35"/>
 	<arg name="arm_activation_clearance_dist" default="0.55"/>
 	<arg name="arm_activation_clearance_release_dist" default="0.25"/>
-	<arg name="arm_activation_collision_skip_weight" default="0.85"/>
+	<arg name="arm_activation_collision_skip_weight" default="1.10"/>
 	<arg name="base_motion_regularization_enabled" default="false"/>
 	<arg name="weight_base_progress" default="25.0"/>
 	<arg name="base_progress_margin" default="0.05"/>
 	<arg name="weight_base_yaw_rate" default="0.0"/>
 	<arg name="weight_base_yaw_acc" default="0.0"/>
 	<arg name="flexible_goal_enabled" default="true"/>
-	<arg name="flexible_goal_yaw_range" default="0.80"/>
-	<arg name="flexible_goal_yaw_samples" default="9"/>
+	<arg name="ik_goal_enabled" default="true"/>
+	<arg name="min_approach_standoff" default="0.12"/>
+	<arg name="flexible_goal_yaw_range" default="0.40"/>
+	<arg name="flexible_goal_yaw_samples" default="5"/>
 	<arg name="flexible_goal_yaw_weight" default="0.15"/>
 	<arg name="random_seed" default="2"/>
 	<arg name="base_only_frontend_enabled" default="true"/>
@@ -59,6 +62,7 @@
 		<rosparam param="fsm/init_state" subst_value="true">[$(arg init_x), $(arg init_y), $(arg init_j1), $(arg init_j2), $(arg init_j3), $(arg init_j4), $(arg init_j5), $(arg init_j6)]</rosparam>
 		<param name="fsm/init_yaw" value="$(arg init_yaw)"/>
 		<param name="optimization/arm_activation_enabled" value="$(arg arm_activation_enabled)"/>
+		<param name="optimization/manipulator_safe_collision_check" value="$(arg manipulator_safe_collision_check)"/>
 		<param name="optimization/weight_arm_activation" value="$(arg weight_arm_activation)"/>
 		<param name="optimization/weight_arm_activation_vel" value="$(arg weight_arm_activation_vel)"/>
 		<param name="optimization/arm_activation_full_dist" value="$(arg arm_activation_full_dist)"/>
@@ -72,6 +76,8 @@
 		<param name="optimization/weight_base_yaw_rate" value="$(arg weight_base_yaw_rate)"/>
 		<param name="optimization/weight_base_yaw_acc" value="$(arg weight_base_yaw_acc)"/>
 		<param name="charging_demo/flexible_goal_enabled" value="$(arg flexible_goal_enabled)"/>
+		<param name="charging_demo/ik_goal_enabled" value="$(arg ik_goal_enabled)"/>
+		<param name="charging_demo/min_approach_standoff" value="$(arg min_approach_standoff)"/>
 		<param name="charging_demo/flexible_goal_yaw_range" value="$(arg flexible_goal_yaw_range)"/>
 		<param name="charging_demo/flexible_goal_yaw_samples" value="$(arg flexible_goal_yaw_samples)"/>
 		<param name="charging_demo/flexible_goal_yaw_weight" value="$(arg flexible_goal_yaw_weight)"/>

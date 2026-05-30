@@ -106,6 +106,7 @@ namespace remani_planner
     double wei_mani_self_;                   // manipulator self collision weight
     double wei_mani_feas_;                   // manipulator feasibility weight
     bool arm_activation_enabled_;
+    bool manipulator_safe_collision_check_;
     double wei_arm_activation_;
     double wei_arm_activation_vel_;
     double arm_activation_full_dist_;

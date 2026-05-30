@@ -92,6 +92,22 @@ namespace remani_planner
     int charging_flexible_goal_yaw_samples_;
     double charging_flexible_goal_yaw_weight_;
     Eigen::Vector2d charging_goal_xy_;
+    Eigen::Vector3d charging_goal_position_;
+    Eigen::Vector2d charging_port_normal_xy_;
+    double charging_min_approach_standoff_;
+    Eigen::Vector4d charging_tip_point_link6_;
+    bool charging_ik_goal_enabled_;
+    double charging_ik_tolerance_;
+    double charging_ik_damping_;
+    double charging_ik_step_limit_;
+    double charging_ik_joint_weight_;
+    double charging_ik_reference_weight_;
+    double charging_ik_reference_yaw_weight_;
+    int charging_ik_max_iterations_;
+    std::vector<double> charging_ik_standoff_offsets_;
+    std::vector<double> charging_ik_lateral_offsets_;
+    Eigen::VectorXd manipulator_min_pos_;
+    Eigen::VectorXd manipulator_max_pos_;
 
     int mobile_base_dim_, manipulator_dim_, traj_dim_;
     double mobile_base_non_singul_vel_;
@@ -138,6 +154,11 @@ namespace remani_planner
     bool callEmergencyStop(Eigen::VectorXd stop_pos, double stop_yaw, const int singul); // front-end and back-end method
     bool planFromGlobalTraj(const int trial_times = 1);
     bool planFromLocalTraj(bool flag_use_poly_init);
+    Eigen::Vector3d computeChargingTipPosition(const Eigen::Vector3d &base_state, const Eigen::VectorXd &mani_state);
+    void clampManipulatorState(Eigen::VectorXd &mani_state);
+    bool solveChargingIK(const Eigen::Vector3d &base_state, const Eigen::VectorXd &seed_state,
+                         Eigen::VectorXd &solution, double &tip_error);
+    bool selectChargingDockingGoal(Eigen::VectorXd &selected_wp, double &selected_yaw);
     
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
