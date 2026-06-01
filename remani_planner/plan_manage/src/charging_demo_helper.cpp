@@ -1,6 +1,7 @@
 #include <cmath>
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <nav_msgs/Odometry.h>
 #include <std_msgs/Header.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -55,6 +56,11 @@ int main(int argc, char **argv)
       nh.advertise<visualization_msgs::MarkerArray>("/model_vis/vis_mm", 1, true);
   ros::Publisher goal_pub =
       nh.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1, true);
+  bool have_odom = false;
+  ros::Subscriber odom_sub = nh.subscribe<nav_msgs::Odometry>(
+      "/mm/car/odom", 1, [&](const nav_msgs::Odometry::ConstPtr &) {
+        have_odom = true;
+      });
 
   const std::string frame_id = "world";
   const double px = port_surface_position.size() > 0 ? port_surface_position[0] : -0.60;
@@ -122,7 +128,7 @@ int main(int argc, char **argv)
     marker_pub.publish(markers);
     rviz_default_marker_pub.publish(markers);
 
-    if (auto_trigger && !triggered &&
+    if (auto_trigger && !triggered && have_odom &&
         (ros::Time::now() - start_time).toSec() >= trigger_delay)
     {
       geometry_msgs::PoseStamped goal;

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import math
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -35,7 +36,7 @@ class ChargingDemoMetrics:
         self.target = self.param_vec("charging_demo/goal_position", [-0.60, 0.20, 0.45])
         self.port_surface = self.param_vec("charging_demo/port_surface_position", [-0.60, 0.25, 0.45])
         self.port_contact_radius = float(rospy.get_param("charging_demo/port_contact_radius", 0.08))
-        self.start_time = rospy.Time.now()
+        self.start_time = time.monotonic()
 
         rospy.Subscriber("/mm/car/odom", Odometry, self.odom_cb, queue_size=20)
         rospy.Subscriber("/mm/mani/joint_state", JointState, self.joint_cb, queue_size=20)
@@ -58,7 +59,7 @@ class ChargingDemoMetrics:
         return math.atan2(siny, cosy)
 
     def elapsed(self):
-        return (rospy.Time.now() - self.start_time).to_sec()
+        return time.monotonic() - self.start_time
 
     def odom_cb(self, msg):
         p = msg.pose.pose.position
@@ -228,5 +229,5 @@ class ChargingDemoMetrics:
 
 
 if __name__ == "__main__":
-    rospy.init_node("charging_demo_metrics")
+    rospy.init_node("charging_demo_metrics", anonymous=True)
     ChargingDemoMetrics().run()

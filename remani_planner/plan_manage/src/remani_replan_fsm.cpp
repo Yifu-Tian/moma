@@ -537,15 +537,36 @@ namespace remani_planner
     Eigen::VectorXd mid_seed = 0.5 * (ref_wp.tail(manipulator_dim_) + mm_state_pos_.tail(manipulator_dim_));
     seeds.push_back(mid_seed);
 
-    double best_score = std::numeric_limits<double>::infinity();
+    std::vector<double> yaw_candidates;
+    auto add_yaw_candidate = [&](double yaw, double supplemental_penalty){
+      const double normalized_yaw = atan2(sin(yaw), cos(yaw));
+      for(const auto &existing : yaw_candidates){
+        if(std::abs(atan2(sin(normalized_yaw - existing), cos(normalized_yaw - existing))) < 1.0e-3){
+          return;
+        }
+      }
+      yaw_candidates.push_back(normalized_yaw);
+    };
+
     double best_tip_error = std::numeric_limits<double>::infinity();
     bool found = false;
-    const int sample_num = std::max(1, charging_flexible_goal_yaw_samples_);
+    double effective_yaw_range = charging_flexible_goal_yaw_range_;
+    int sample_num = std::max(1, charging_flexible_goal_yaw_samples_);
+    if(mm_state_pos_(1) < -1.0){
+      effective_yaw_range = 3.14;
+      sample_num = std::max(sample_num, 13);
+    }
 
     for(int i = 0; i < sample_num; ++i){
       const double ratio = sample_num == 1 ? 0.5 : double(i) / double(sample_num - 1);
-      const double yaw = ref_yaw - charging_flexible_goal_yaw_range_
-                       + 2.0 * charging_flexible_goal_yaw_range_ * ratio;
+      const double yaw = ref_yaw - effective_yaw_range
+                       + 2.0 * effective_yaw_range * ratio;
+      add_yaw_candidate(yaw, 0.0);
+    }
+
+    double best_score = std::numeric_limits<double>::infinity();
+
+    for(const auto &yaw : yaw_candidates){
       Eigen::Matrix2d R;
       R << cos(yaw), -sin(yaw),
            sin(yaw),  cos(yaw);
@@ -590,7 +611,7 @@ namespace remani_planner
                                     * (candidate.tail(manipulator_dim_) - mm_state_pos_.tail(manipulator_dim_)).squaredNorm();
             const double joint_ref_cost = charging_ik_joint_weight_
                                         * (candidate.tail(manipulator_dim_) - ref_wp.tail(manipulator_dim_)).squaredNorm();
-            const double tip_cost = 10.0 * tip_error * tip_error;
+            const double tip_cost = 1000.0 * tip_error * tip_error;
             const double score = base_cost + base_ref_cost + yaw_cost + yaw_ref_cost
                                + joint_cost + joint_ref_cost + tip_cost;
 

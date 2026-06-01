@@ -43,6 +43,39 @@ Run without RViz for log-only validation:
 cd ~/remani_ws/remani_mpd_ws && source devel/setup.bash && roslaunch remani_planner exp_charging.launch init_x:=1.8 init_y:=-1.2 init_yaw:=0 show_rviz:=false
 ```
 
+Run the generated random-start cases one by one in RViz. These 20 cases match
+the random batch generated with `--random-starts 20 --random-start-seed 17
+--random-start-margin 0.05`.
+
+```bash
+cd ~/remani_ws/remani_mpd_ws
+source devel/setup.bash
+
+roslaunch remani_planner exp_charging.launch init_x:=0.709 init_y:=-1.364 init_yaw:=-180 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.230 init_y:=1.103 init_yaw:=90 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.214 init_y:=0.006 init_yaw:=45 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.754 init_y:=0.179 init_yaw:=-90 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=1.419 init_y:=1.314 init_yaw:=-90 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=1.749 init_y:=0.115 init_yaw:=-45 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-0.947 init_y:=-1.463 init_yaw:=135 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=1.423 init_y:=1.470 init_yaw:=-180 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-2.164 init_y:=-0.080 init_yaw:=-180 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=1.679 init_y:=-0.914 init_yaw:=180 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.395 init_y:=-0.880 init_yaw:=45 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-2.127 init_y:=-1.525 init_yaw:=0 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.494 init_y:=0.364 init_yaw:=180 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=0.106 init_y:=1.406 init_yaw:=0 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=0.695 init_y:=1.458 init_yaw:=45 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.598 init_y:=-1.421 init_yaw:=0 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-0.825 init_y:=-1.573 init_yaw:=45 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-2.310 init_y:=0.856 init_yaw:=135 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-1.187 init_y:=0.869 init_yaw:=135 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+roslaunch remani_planner exp_charging.launch init_x:=-2.303 init_y:=0.225 init_yaw:=-90 show_rviz:=true flexible_goal_enabled:=true ik_goal_enabled:=true base_only_frontend_enabled:=true arm_activation_enabled:=true arm_activation_collision_skip_weight:=1.10 max_seach_time:=1.5
+```
+
+For a same-search-budget comparison with the original REMANI baseline, replace
+`max_seach_time:=1.5` with `max_seach_time:=0.5`.
+
 Useful validation starts:
 
 ```bash

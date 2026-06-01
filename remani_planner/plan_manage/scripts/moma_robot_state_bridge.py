@@ -2,6 +2,7 @@
 import math
 
 import rospy
+from rospy.exceptions import ROSException
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
@@ -31,6 +32,8 @@ class MomaRobotStateBridge:
             self.arm_positions = list(msg.position[:6])
 
     def publish(self, _event):
+        if rospy.is_shutdown():
+            return
         msg = JointState()
         msg.header = Header(stamp=rospy.Time.now())
         msg.name = [
@@ -55,7 +58,10 @@ class MomaRobotStateBridge:
             self.arm_positions[4],
             self.arm_positions[5],
         ]
-        self.pub.publish(msg)
+        try:
+            self.pub.publish(msg)
+        except ROSException:
+            return
 
 
 if __name__ == "__main__":

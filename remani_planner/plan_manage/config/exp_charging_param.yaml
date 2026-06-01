@@ -22,8 +22,8 @@ charging_demo:
   allow_port_contact: true
   port_contact_radius: 0.08
   flexible_goal_enabled: true
-  flexible_goal_yaw_range: 0.40
-  flexible_goal_yaw_samples: 5
+  flexible_goal_yaw_range: 0.52
+  flexible_goal_yaw_samples: 13
   flexible_goal_yaw_weight: 0.15
   ik_goal_enabled: true
   ik_tolerance: 0.02

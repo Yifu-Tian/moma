@@ -45,10 +45,12 @@
 	<arg name="flexible_goal_enabled" default="true"/>
 	<arg name="ik_goal_enabled" default="true"/>
 	<arg name="min_approach_standoff" default="0.02"/>
-	<arg name="flexible_goal_yaw_range" default="0.40"/>
-	<arg name="flexible_goal_yaw_samples" default="5"/>
+	<arg name="flexible_goal_yaw_range" default="0.52"/>
+	<arg name="flexible_goal_yaw_samples" default="13"/>
 	<arg name="flexible_goal_yaw_weight" default="0.15"/>
 	<arg name="random_seed" default="2"/>
+	<arg name="try_astar_times" default="10"/>
+	<arg name="max_seach_time" default="0.5"/>
 	<arg name="base_only_frontend_enabled" default="true"/>
 	<arg name="base_only_release_dist" default="1.20"/>
 	<arg name="base_only_check_dt" default="0.05"/>
@@ -82,6 +84,8 @@
 		<param name="charging_demo/flexible_goal_yaw_samples" value="$(arg flexible_goal_yaw_samples)"/>
 		<param name="charging_demo/flexible_goal_yaw_weight" value="$(arg flexible_goal_yaw_weight)"/>
 		<param name="search/random_seed" value="$(arg random_seed)"/>
+		<param name="search/try_astar_times" value="$(arg try_astar_times)"/>
+		<param name="search/max_seach_time" value="$(arg max_seach_time)"/>
 		<param name="search/base_only_frontend_enabled" value="$(arg base_only_frontend_enabled)"/>
 		<param name="search/base_only_release_dist" value="$(arg base_only_release_dist)"/>
 		<param name="search/base_only_check_dt" value="$(arg base_only_check_dt)"/>
